@@ -1,4 +1,4 @@
-import type { Document, Project, ProjectCreate } from "../../types/contracts";
+import type { Document, Job, OutlineNode, Project, ProjectCreate, UploadIntent } from "../../types/contracts";
 
 const apiUrl = process.env.NEXT_PUBLIC_IDMS_API_URL ?? "http://localhost:8000/api/v1";
 
@@ -12,3 +12,16 @@ export const listProjects = () => request<Project[]>("/projects", { cache: "no-s
 export const createProject = (project: ProjectCreate) => request<Project>("/projects", { method: "POST", body: JSON.stringify(project) });
 export const getProject = (projectId: string) => request<Project>(`/projects/${projectId}`, { cache: "no-store" });
 export const listDocuments = (projectId: string) => request<Document[]>(`/projects/${projectId}/documents`, { cache: "no-store" });
+
+export const createUploadIntent = (projectId: string, file: File, checksum_sha256: string, role: "master_candidate" | "source") => request<UploadIntent>(`/projects/${projectId}/documents/uploads`, { method: "POST", body: JSON.stringify({ filename: file.name, size_bytes: file.size, checksum_sha256, role }) });
+
+export async function uploadDocx(file: File, intent: UploadIntent): Promise<Document> {
+  const upload = await fetch(intent.upload_url, { method: "PUT", headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }, body: file });
+  if (!upload.ok) throw new Error(`Upload failed with ${upload.status}`);
+  return request<Document>(`/documents/${intent.document_id}/uploads/complete`, { method: "POST", body: "{}" });
+}
+
+export const selectMaster = (projectId: string, documentId: string) => request<Document[]>(`/projects/${projectId}/master-document`, { method: "PUT", body: JSON.stringify({ document_id: documentId }) });
+export const getOutline = (documentId: string) => request<OutlineNode[]>(`/documents/${documentId}/outline`, { cache: "no-store" });
+export const createMergeJob = (projectId: string, operations: Array<{ source_version_id: string; source_node_key: string; destination_node_key: string | null; position: "before" | "after"; sort_order: number }>) => request<Job>(`/projects/${projectId}/merge-jobs`, { method: "POST", body: JSON.stringify({ operations }) });
+export const startAnalysis = (documentId: string) => request<Job>(`/documents/${documentId}/analysis`, { method: "POST", body: "{}" });
