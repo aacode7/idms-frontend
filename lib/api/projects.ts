@@ -1,4 +1,4 @@
-import type { Document, Job, OutlineNode, Project, ProjectCreate, UploadIntent } from "../../types/contracts";
+import type { Document, Job, MergePreview, OutlineNode, Project, ProjectCreate, UploadIntent } from "../../types/contracts";
 
 const apiUrl = process.env.NEXT_PUBLIC_IDMS_API_URL ?? "http://localhost:8000/api/v1";
 
@@ -24,4 +24,5 @@ export async function uploadDocx(file: File, intent: UploadIntent): Promise<Docu
 export const selectMaster = (projectId: string, documentId: string) => request<Document[]>(`/projects/${projectId}/master-document`, { method: "PUT", body: JSON.stringify({ document_id: documentId }) });
 export const getOutline = (documentId: string) => request<OutlineNode[]>(`/documents/${documentId}/outline`, { cache: "no-store" });
 export const createMergeJob = (projectId: string, operations: Array<{ source_version_id: string; source_node_key: string; destination_node_key: string | null; position: "before" | "after"; sort_order: number }>) => request<Job>(`/projects/${projectId}/merge-jobs`, { method: "POST", body: JSON.stringify({ operations }) });
+export const previewMerge = (projectId: string, operations: Array<{ source_version_id: string; source_node_key: string; destination_node_key: string | null; position: "before" | "after"; sort_order: number }>) => request<MergePreview>(`/projects/${projectId}/merge-preview`, { method: "POST", body: JSON.stringify({ operations }) });
 export const startAnalysis = (documentId: string) => request<Job>(`/documents/${documentId}/analysis`, { method: "POST", body: "{}" });

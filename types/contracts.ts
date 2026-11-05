@@ -30,3 +30,5 @@ export type UploadIntent = {
 
 export type OutlineNode = { node_key: string; title: string; level: number; parent_node_key: string | null; block_index: number; end_block_index: number };
 export type Job = { id: string; kind: string; status: string; stage: string; error_code: string | null };
+export type Diagnostic = { code: string; severity: "info" | "warning" | "error"; message: string; operation_index: number | null };
+export type MergePreview = { warnings: string[]; diagnostics: Diagnostic[] };
