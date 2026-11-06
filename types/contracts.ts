@@ -16,6 +16,7 @@ export type Document = {
   size_bytes: number;
   role: "master_candidate" | "master" | "source" | "generated";
   status: "upload_pending" | "uploaded";
+  analysis_status: "not_started" | "queued" | "running" | "completed" | "failed";
   version_id: string;
   created_at: string;
 };
