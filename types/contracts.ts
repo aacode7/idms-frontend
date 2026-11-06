@@ -32,3 +32,23 @@ export type OutlineNode = { node_key: string; title: string; level: number; pare
 export type Job = { id: string; kind: string; status: string; stage: string; error_code: string | null };
 export type Diagnostic = { code: string; severity: "info" | "warning" | "error"; message: string; operation_index: number | null };
 export type MergePreview = { warnings: string[]; diagnostics: Diagnostic[] };
+
+export type DocumentVersion = {
+  id: string;
+  version_number: number;
+  created_at: string;
+  created_by: string;
+  description: string | null;
+  parent_version_id: string | null;
+  is_latest: boolean;
+  download_url: string;
+};
+
+export type VersionComparison = {
+  base_version_id: string;
+  target_version_id: string;
+  base_version_number: number;
+  target_version_number: number;
+  changed: boolean;
+  diff: string[];
+};
