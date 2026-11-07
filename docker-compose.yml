@@ -1,0 +1,14 @@
+name: idms-frontend
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_IDMS_API_URL: ${NEXT_PUBLIC_IDMS_API_URL:-http://localhost:8000/api/v1}
+    env_file:
+      - .env.local
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped

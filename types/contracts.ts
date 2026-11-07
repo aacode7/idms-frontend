@@ -16,7 +16,8 @@ export type Document = {
   size_bytes: number;
   role: "master_candidate" | "master" | "source" | "generated";
   status: "upload_pending" | "uploaded";
-  analysis_status: "not_started" | "queued" | "running" | "completed" | "failed";
+  analysis_status:
+    "not_started" | "queued" | "running" | "completed" | "failed";
   version_id: string;
   created_at: string;
 };
@@ -29,10 +30,34 @@ export type UploadIntent = {
   expires_in_seconds: number;
 };
 
-export type OutlineNode = { node_key: string; title: string; level: number; parent_node_key: string | null; block_index: number; end_block_index: number };
-export type Job = { id: string; kind: string; status: string; stage: string; error_code: string | null };
-export type Diagnostic = { code: string; severity: "info" | "warning" | "error"; message: string; operation_index: number | null };
+export type OutlineNode = {
+  node_key: string;
+  title: string;
+  level: number;
+  parent_node_key: string | null;
+  block_index: number;
+  end_block_index: number;
+};
+export type Job = {
+  id: string;
+  kind: string;
+  status: string;
+  stage: string;
+  error_code: string | null;
+};
+export type Diagnostic = {
+  code: string;
+  severity: "info" | "warning" | "error";
+  message: string;
+  operation_index: number | null;
+};
 export type MergePreview = { warnings: string[]; diagnostics: Diagnostic[] };
+export type MergeResult = {
+  source_node_key: string;
+  generated_version_id: string;
+  generated_document_id: string;
+  editor_anchor_id: string | null;
+};
 
 export type DocumentVersion = {
   id: string;

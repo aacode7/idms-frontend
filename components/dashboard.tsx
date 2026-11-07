@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { createProject, listProjects } from "../lib/api/projects";
+import { createProject, deleteProject, listProjects } from "../lib/api/projects";
 import type { Project } from "../types/contracts";
 
 export function Dashboard() {
@@ -9,6 +9,9 @@ export function Dashboard() {
   const [name, setName] = useState("");
   const [state, setState] = useState<"loading" | "ready" | "submitting" | "error">("loading");
   const [message, setMessage] = useState("");
+  const [menuProjectId, setMenuProjectId] = useState<string | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     listProjects().then(setProjects).then(() => setState("ready")).catch(() => {
@@ -33,32 +36,51 @@ export function Dashboard() {
     }
   }
 
-  return <main className="shell">
-    <header className="topbar"><a className="brand" href="/dashboard">IDMS</a><span>Document composition workspace</span></header>
-    <section className="hero">
-      <p className="eyebrow">WORKSPACE</p>
-      <h1>Build the right document from the right sections.</h1>
-      <p>Start a project, add original DOCX files, choose one master, then compose a new immutable version.</p>
-    </section>
-    <section className="grid">
-      <form className="panel create" onSubmit={submit}>
-        <p className="eyebrow">NEW PROJECT</p>
-        <h2>Create a document workspace</h2>
-        <label htmlFor="project-name">Project name</label>
-        <input id="project-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Campus proposal" maxLength={160} required />
-        <button disabled={state === "submitting"}>{state === "submitting" ? "Creating…" : "Create new project"}</button>
+  async function confirmDelete() {
+    if (!projectToDelete) return;
+    setDeleting(true);
+    try {
+      await deleteProject(projectToDelete.id);
+      setProjects((current) => current.filter((project) => project.id !== projectToDelete.id));
+      setMessage(`“${projectToDelete.name}” and all of its files were permanently deleted.`);
+      setState("ready");
+      setProjectToDelete(null);
+    } catch {
+      setMessage("The project could not be deleted. Its records were kept so you can retry safely.");
+      setState("error");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return <main className="dashboard-shell">
+    <section className="dashboard-grid">
+      <form className="dashboard-card project-creator" onSubmit={submit}>
+        <div className="card-kicker"><span className="dashboard-icon" aria-hidden="true">✦</span><span>NEW PROJECT</span></div>
+        <h1>Create a document workspace</h1>
+        <p className="dashboard-copy">Compose original DOCX files into a new, immutable document version with section-level control.</p>
+        <label htmlFor="project-name">PROJECT NAME <span aria-hidden="true">*</span></label>
+        <input id="project-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Campus expansion proposal" maxLength={160} required />
+        <button disabled={state === "submitting"}><span aria-hidden="true">＋</span>{state === "submitting" ? "Creating…" : "Create new project"}</button>
         {message && <p className={state === "error" ? "feedback error" : "feedback"} role="status">{message}</p>}
       </form>
-      <section className="panel">
-        <p className="eyebrow">HOW IDMS WORKS</p>
-        <ol className="steps"><li>Upload original DOCX documents</li><li>Choose the one master document</li><li>Select, position, preview, and merge sections</li><li>Edit and export the resulting version</li></ol>
+      <section className="dashboard-card workflow-card">
+        <div className="card-kicker"><span className="dashboard-icon workflow-icon" aria-hidden="true">⌘</span><span>WORKFLOW GUIDE</span><small>4 quick steps</small></div>
+        <h2>How IDMS works</h2>
+        <ol className="workflow-steps">
+          <li><span>1</span><div><strong>Upload original DOCX documents</strong><p>Add the master document and source files to your workspace.</p></div></li>
+          <li><span>2</span><div><strong>Choose the master document</strong><p>Keep its layout and style as the authoritative baseline.</p></div></li>
+          <li><span>3</span><div><strong>Select, position &amp; merge sections</strong><p>Preview compatibility before creating a new version.</p></div></li>
+          <li><span>4</span><div><strong>Edit and export the resulting version</strong><p>Review the composed document and export when ready.</p></div></li>
+        </ol>
       </section>
     </section>
-    <section className="recent">
-      <div><p className="eyebrow">RECENT WORKSPACES</p><h2>Your projects</h2></div>
+    <section className="dashboard-recent">
+      <div className="recent-heading"><div><p className="eyebrow">RECENT WORKSPACES</p><h2>Your projects</h2></div><span className="project-count">{projects.length} total</span></div>
       {state === "loading" && <p className="muted">Loading projects…</p>}
       {state === "ready" && projects.length === 0 && <p className="empty">No projects yet. Create one to begin composing a document.</p>}
-      <div className="project-list">{projects.map((project) => <a className="project" href={`/projects/${project.id}`} key={project.id}><span><strong>{project.name}</strong><small>{project.document_count} documents</small></span><span aria-hidden="true">→</span></a>)}</div>
+      <div className="project-list">{projects.map((project) => <article className="project" key={project.id}><a className="project-open" href={`/projects/${project.id}`}><span className="project-file-icon" aria-hidden="true">▤</span><strong>{project.name}</strong><p>{project.description || "Document composition workspace"}</p><span className="project-meta"><b>{project.document_count}</b> {project.document_count === 1 ? "document" : "documents"}<em>Open workspace →</em></span></a><button className="project-menu" type="button" aria-label={`Actions for ${project.name}`} aria-expanded={menuProjectId === project.id} onClick={() => setMenuProjectId((current) => current === project.id ? null : project.id)}>•••</button>{menuProjectId === project.id && <div className="project-actions" role="menu"><button type="button" role="menuitem" onClick={() => { setMenuProjectId(null); setProjectToDelete(project); }}>Delete project</button></div>}</article>)}</div>
     </section>
+    {projectToDelete && <div className="delete-backdrop" role="presentation"><section className="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-project-title"><p className="eyebrow">PERMANENT DELETION</p><h2 id="delete-project-title">Delete “{projectToDelete.name}”?</h2><p>This permanently deletes the project, its {projectToDelete.document_count} {projectToDelete.document_count === 1 ? "document" : "documents"}, every version, analysis, job record, and all associated DOCX/PDF files from object storage. This cannot be undone.</p><div><button className="secondary" type="button" disabled={deleting} onClick={() => setProjectToDelete(null)}>Cancel</button><button className="danger" type="button" disabled={deleting} onClick={confirmDelete}>{deleting ? "Deleting…" : "Delete permanently"}</button></div></section></div>}
   </main>;
 }

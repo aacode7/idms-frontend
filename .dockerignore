@@ -1,0 +1,32 @@
+# Repository and local tooling
+.git
+.github
+.agents
+.codex
+.vscode
+.idea
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+
+# Installed dependencies and generated output
+node_modules
+.next
+out
+coverage
+*.tsbuildinfo
+
+# Files not required to build the production image
+README.md
+tests
+__tests__
+
+# Local Docker/build artifacts
+Dockerfile*
+docker-compose*.yml
+docker-compose*.yaml
+.dockerignore
