@@ -1,5 +1,12 @@
 "use client";
-import { DragEvent, MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  DragEvent,
+  MouseEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useParams } from "next/navigation";
 import {
   createMergeJob,
@@ -57,6 +64,7 @@ export default function MergePage() {
     [preview, setPreview] = useState<MergePreview | null>(null),
     [results, setResults] = useState<MergeResult[]>([]),
     [checking, setChecking] = useState(false),
+    [merging, setMerging] = useState(false),
     [deletingMergeDocumentId, setDeletingMergeDocumentId] = useState<
       string | null
     >(null),
@@ -144,7 +152,8 @@ export default function MergePage() {
         ...candidate,
         destination,
         position,
-        resolutionOptions: existing?.resolutionOptions ?? defaultResolutionOptions,
+        resolutionOptions:
+          existing?.resolutionOptions ?? defaultResolutionOptions,
       };
       return existing
         ? items.map((item) => (item === existing ? next : item))
@@ -263,7 +272,10 @@ export default function MergePage() {
     setSelected((items) =>
       items.map((item, index) =>
         index === operationIndex
-          ? { ...item, resolutionOptions: { ...item.resolutionOptions, [key]: enabled } }
+          ? {
+              ...item,
+              resolutionOptions: { ...item.resolutionOptions, [key]: enabled },
+            }
           : item,
       ),
     );
@@ -289,20 +301,40 @@ export default function MergePage() {
   }
   async function merge() {
     if (!master || !selected.length) return;
-    const job = await createMergeJob(projectId, operations());
-    setMessage("Merge queued. Waiting for generated document…");
-    const timer = window.setInterval(async () => {
-      const status = await getJob(job.id);
-      if (status.status === "completed") {
-        window.clearInterval(timer);
-        setResults(await getMergeResults(projectId));
-        setMessage("Merge complete. Open an inserted section in ONLYOFFICE.");
-      }
-      if (status.status === "failed") {
-        window.clearInterval(timer);
-        setMessage("Merge failed.");
-      }
-    }, 2000);
+    setMerging(true);
+    try {
+      const job = await createMergeJob(projectId, operations());
+      setMessage("Merge queued. Waiting for the generated document…");
+      const timer = window.setInterval(async () => {
+        try {
+          const status = await getJob(job.id);
+          if (status.status === "completed") {
+            window.clearInterval(timer);
+            setResults(await getMergeResults(projectId));
+            setMerging(false);
+            setMessage(
+              "Merge complete. Open the generated document in ONLYOFFICE.",
+            );
+          }
+          if (status.status === "failed") {
+            window.clearInterval(timer);
+            setMerging(false);
+            setMessage("Merge failed. Review your selections and try again.");
+          }
+        } catch {
+          window.clearInterval(timer);
+          setMerging(false);
+          setMessage(
+            "Merge status could not be retrieved. Refresh this page to check the result.",
+          );
+        }
+      }, 2000);
+    } catch (error) {
+      setMerging(false);
+      setMessage(
+        error instanceof Error ? error.message : "Merge could not be started.",
+      );
+    }
   }
   async function removeGeneratedMerge(result: MergeResult) {
     if (deletingMergeRef.current === result.generated_document_id) return;
@@ -339,13 +371,49 @@ export default function MergePage() {
         <a className="back" href={`/projects/${projectId}`}>
           <span>←</span> Back to workspace
         </a>
-        <p className="eyebrow">MERGE WORKSPACE</p>
-        <h1>Compose your final document</h1>
+        <div className="merge-title-row">
+          <div>
+            <p className="eyebrow">STEP 3 OF 3 · MERGE WORKSPACE</p>
+            <h1>Compose your final document</h1>
+            <p className="merge-intro">
+              Add reviewed source sections to the master without changing the
+              original files.
+            </p>
+          </div>
+          <div
+            className="merge-progress"
+            aria-label="Document composition workflow"
+          >
+            <span>
+              1 <em>Upload</em>
+            </span>
+            <span>
+              2 <em>Review</em>
+            </span>
+            <strong>
+              3 <em>Merge</em>
+            </strong>
+          </div>
+        </div>
       </header>
       <div className="merge-layout">
         <aside className="source-pane">
-          <p className="eyebrow">SOURCE DOCUMENTS</p>
-          <h2>Parsed sections</h2>
+          <div className="pane-heading">
+            <div>
+              <p className="eyebrow">SOURCE DOCUMENTS</p>
+              <h2>Parsed sections</h2>
+            </div>
+            <span className="pane-count">{sources.length}</span>
+          </div>
+          <p className="pane-hint">
+            Select a heading, then place it in the master map.
+          </p>
+          {!sources.length && (
+            <p className="merge-empty">
+              No source documents are available. Return to the workspace to add
+              one.
+            </p>
+          )}
           {sources.map((doc) => (
             <section className="source-card" key={doc.id}>
               <button type="button" onClick={() => load(doc)}>
@@ -404,6 +472,17 @@ export default function MergePage() {
             <span>{masterOutline.length} sections</span>
           </div>
           <section className={`master-paper ${dragged ? "is-dragging" : ""}`}>
+            {!master && (
+              <p className="merge-empty">
+                Choose a master document in the workspace before planning a
+                merge.
+              </p>
+            )}
+            {master && !masterOutline.length && (
+              <p className="merge-empty">
+                The master outline is loading, or no headings were found.
+              </p>
+            )}
             {masterOutline.map((node, index) => (
               <div key={node.node_key}>
                 {index === 0 && (
@@ -459,8 +538,24 @@ export default function MergePage() {
             ))}
           </section>
           <section className="insertion-plan">
-            <p className="eyebrow">INSERTION PLAN</p>
-            <h2>{selected.length} selected sections</h2>
+            <div className="plan-heading">
+              <div>
+                <p className="eyebrow">INSERTION PLAN</p>
+                <h2>
+                  {selected.length
+                    ? `${selected.length} selected section${selected.length === 1 ? "" : "s"}`
+                    : "No sections selected"}
+                </h2>
+              </div>
+              {selected.length > 0 && (
+                <span className="selection-status">Ready to review</span>
+              )}
+            </div>
+            {!selected.length && (
+              <p className="merge-empty">
+                Select a source heading to build an ordered insertion plan.
+              </p>
+            )}
             {selected.map((s, i) => (
               <div className="plan-row" key={s.document.id + s.node.node_key}>
                 <span>{i + 1}</span>
@@ -583,17 +678,23 @@ export default function MergePage() {
                                 <td>{finding.source_value ?? "—"}</td>
                                 <td>
                                   <strong>{finding.master_value ?? "—"}</strong>
-                                  <span>{finding.merge_effect ?? finding.message}</span>
+                                  <span>
+                                    {finding.merge_effect ?? finding.message}
+                                  </span>
                                 </td>
                                 <td>
-                                  {finding.resolution_key && !finding.resolution_required ? (
+                                  {finding.resolution_key &&
+                                  !finding.resolution_required ? (
                                     <label className="compatibility-choice">
                                       <input
                                         type="checkbox"
                                         checked={
-                                          selected[operationIndex]?.resolutionOptions[
+                                          selected[operationIndex]
+                                            ?.resolutionOptions[
                                             finding.resolution_key as keyof Selection["resolutionOptions"]
-                                          ] ?? finding.resolution_default ?? true
+                                          ] ??
+                                          finding.resolution_default ??
+                                          true
                                         }
                                         onChange={(event) =>
                                           setResolution(
@@ -603,9 +704,12 @@ export default function MergePage() {
                                           )
                                         }
                                       />
-                                      {selected[operationIndex]?.resolutionOptions[
+                                      {(selected[operationIndex]
+                                        ?.resolutionOptions[
                                         finding.resolution_key as keyof Selection["resolutionOptions"]
-                                      ] ?? finding.resolution_default ?? true
+                                      ] ??
+                                      finding.resolution_default ??
+                                      true)
                                         ? "Apply"
                                         : "Keep source"}
                                     </label>
@@ -614,7 +718,9 @@ export default function MergePage() {
                                       Required
                                     </small>
                                   ) : (
-                                    <small className="compatibility-required">Info</small>
+                                    <small className="compatibility-required">
+                                      Info
+                                    </small>
                                   )}
                                 </td>
                               </tr>
@@ -638,24 +744,26 @@ export default function MergePage() {
             </section>
           )}
           <footer className="merge-actions">
-            <p>
+            <p role="status" aria-live="polite">
               {message ||
                 "Select headings, map insertion points, then verify compatibility."}
             </p>
             <button
               type="button"
               className="secondary"
-              disabled={!selected.length || checking}
+              disabled={!selected.length || checking || merging}
               onClick={check}
             >
               {checking ? "Checking…" : "Check compatibility"}
             </button>
             <button
               type="button"
-              disabled={!master || !selected.length}
+              disabled={!master || !selected.length || checking || merging}
               onClick={merge}
             >
-              Create merge ({selected.length})
+              {merging
+                ? "Creating merge…"
+                : `Create merge (${selected.length})`}
             </button>
           </footer>
         </section>

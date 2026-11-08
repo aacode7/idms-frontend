@@ -95,6 +95,33 @@ export function Dashboard() {
 
   return (
     <main className="dashboard-shell">
+      <header className="dashboard-topbar">
+        <a className="dashboard-brand" href="/dashboard" aria-label="IDMS home">
+          <span className="dashboard-brand-mark" aria-hidden="true">
+            ✦
+          </span>
+          <span>IDMS</span>
+        </a>
+        <div className="dashboard-topbar-center">
+          Document intelligence workspace
+        </div>
+        <div className="dashboard-topbar-actions">
+          <button type="button" className="topbar-icon" aria-label="Help">
+            ?
+          </button>
+          <span className="dashboard-avatar" aria-hidden="true">
+            ID
+          </span>
+        </div>
+      </header>
+      <section className="dashboard-welcome">
+        <p className="eyebrow">YOUR DOCUMENT STUDIO</p>
+        <h1>Welcome to your document studio</h1>
+        <p>
+          Bring your source documents together, keep the original files safe,
+          and create polished versions with confidence.
+        </p>
+      </section>
       <section className="dashboard-grid">
         <form className="dashboard-card project-creator" onSubmit={submit}>
           <div className="card-kicker">
@@ -103,7 +130,7 @@ export function Dashboard() {
             </span>
             <span>NEW PROJECT</span>
           </div>
-          <h1>Create a document workspace</h1>
+          <h2>Create a document workspace</h2>
           <p className="dashboard-copy">
             Compose original DOCX files into a new, immutable document version
             with section-level control.
