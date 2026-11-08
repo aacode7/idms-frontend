@@ -34,9 +34,17 @@ export default function MergePage() {
     [preview, setPreview] = useState<MergePreview | null>(null),
     [results, setResults] = useState<MergeResult[]>([]),
     [checking, setChecking] = useState(false),
-    [deletingMergeDocumentId, setDeletingMergeDocumentId] = useState<string | null>(null),
-    [placementCandidate, setPlacementCandidate] = useState<Pick<Selection, "document" | "node"> | null>(null),
-    [dragged, setDragged] = useState<Pick<Selection, "document" | "node"> | null>(null),
+    [deletingMergeDocumentId, setDeletingMergeDocumentId] = useState<
+      string | null
+    >(null),
+    [placementCandidate, setPlacementCandidate] = useState<Pick<
+      Selection,
+      "document" | "node"
+    > | null>(null),
+    [dragged, setDragged] = useState<Pick<
+      Selection,
+      "document" | "node"
+    > | null>(null),
     [dropTarget, setDropTarget] = useState<string | null>(null);
   const master = useMemo(() => docs.find((d) => d.role === "master"), [docs]);
   const sources = docs.filter(
@@ -95,26 +103,50 @@ export default function MergePage() {
     );
     setPlacementCandidate(checked ? { document, node } : null);
   }
-  function upsertSelection(candidate: Pick<Selection, "document" | "node">, destination: string | null, position: "before" | "after") {
+  function upsertSelection(
+    candidate: Pick<Selection, "document" | "node">,
+    destination: string | null,
+    position: "before" | "after",
+  ) {
     setPreview(null);
     setSelected((items) => {
-      const existing = items.find((item) => item.document.id === candidate.document.id && item.node.node_key === candidate.node.node_key);
+      const existing = items.find(
+        (item) =>
+          item.document.id === candidate.document.id &&
+          item.node.node_key === candidate.node.node_key,
+      );
       const next = { ...candidate, destination, position };
-      return existing ? items.map((item) => item === existing ? next : item) : [...items, next];
+      return existing
+        ? items.map((item) => (item === existing ? next : item))
+        : [...items, next];
     });
     setPlacementCandidate(candidate);
-    setMessage(`Planned “${candidate.node.title}” ${position} the selected master heading.`);
+    setMessage(
+      `Planned “${candidate.node.title}” ${position} the selected master heading.`,
+    );
   }
   function chooseForPlacement(document: Document, node: OutlineNode) {
     const candidate = { document, node };
-    if (!selected.some((item) => item.document.id === document.id && item.node.node_key === node.node_key)) {
+    if (
+      !selected.some(
+        (item) =>
+          item.document.id === document.id &&
+          item.node.node_key === node.node_key,
+      )
+    ) {
       upsertSelection(candidate, masterOutline[0]?.node_key ?? null, "after");
     }
     setPlacementCandidate(candidate);
-    setMessage(`“${node.title}” is selected. Click a master heading to place it after that heading, or drag it to a gap.`);
+    setMessage(
+      `“${node.title}” is selected. Click a master heading to place it after that heading, or drag it to a gap.`,
+    );
   }
-  function placeCandidate(destination: string | null, position: "before" | "after") {
-    if (placementCandidate) upsertSelection(placementCandidate, destination, position);
+  function placeCandidate(
+    destination: string | null,
+    position: "before" | "after",
+  ) {
+    if (placementCandidate)
+      upsertSelection(placementCandidate, destination, position);
   }
   function startDrag(event: DragEvent, document: Document, node: OutlineNode) {
     event.dataTransfer.effectAllowed = "move";
@@ -129,7 +161,9 @@ export default function MergePage() {
     const candidate = { document, node };
     setDragged(candidate);
     setPlacementCandidate(candidate);
-    setMessage(`Drag “${node.title}” to a labelled master gap. The gap label is the exact insertion point.`);
+    setMessage(
+      `Drag “${node.title}” to a labelled master gap. The gap label is the exact insertion point.`,
+    );
   }
   function allowDrop(event: DragEvent, target: string) {
     event.preventDefault();
@@ -138,11 +172,18 @@ export default function MergePage() {
   }
   function candidateFromDrag(event: DragEvent) {
     try {
-      const data = event.dataTransfer.getData("application/x-idms-outline-section");
+      const data = event.dataTransfer.getData(
+        "application/x-idms-outline-section",
+      );
       if (data) {
-        const { documentId, nodeKey } = JSON.parse(data) as { documentId: string; nodeKey: string };
+        const { documentId, nodeKey } = JSON.parse(data) as {
+          documentId: string;
+          nodeKey: string;
+        };
         const document = sources.find((item) => item.id === documentId);
-        const node = document ? outlines[document.id]?.find((item) => item.node_key === nodeKey) : undefined;
+        const node = document
+          ? outlines[document.id]?.find((item) => item.node_key === nodeKey)
+          : undefined;
         if (document && node) return { document, node };
       }
     } catch {
@@ -151,7 +192,11 @@ export default function MergePage() {
     }
     return dragged;
   }
-  function dropOn(event: DragEvent, destination: string | null, position: "before" | "after") {
+  function dropOn(
+    event: DragEvent,
+    destination: string | null,
+    position: "before" | "after",
+  ) {
     event.preventDefault();
     event.stopPropagation();
     const candidate = candidateFromDrag(event);
@@ -160,9 +205,13 @@ export default function MergePage() {
       const destinationTitle = destination
         ? masterOutline.find((node) => node.node_key === destination)?.title
         : "the start of the document";
-      setMessage(`Planned “${candidate.node.title}” ${position} “${destinationTitle}”.`);
+      setMessage(
+        `Planned “${candidate.node.title}” ${position} “${destinationTitle}”.`,
+      );
     } else {
-      setMessage("That drop could not identify the source section. Drag it again from its source row.");
+      setMessage(
+        "That drop could not identify the source section. Drag it again from its source row.",
+      );
     }
     setDragged(null);
     setDropTarget(null);
@@ -177,12 +226,16 @@ export default function MergePage() {
     }));
   async function check() {
     setChecking(true);
-    setMessage("Checking compatibility… Large DOCX files can take up to two minutes.");
+    setMessage(
+      "Checking compatibility… Large DOCX files can take up to two minutes.",
+    );
     try {
       setPreview(await previewMerge(projectId, operations()));
       setMessage("Compatibility results are shown below.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Compatibility check failed.");
+      setMessage(
+        error instanceof Error ? error.message : "Compatibility check failed.",
+      );
     } finally {
       setChecking(false);
     }
@@ -205,14 +258,27 @@ export default function MergePage() {
     }, 2000);
   }
   async function removeGeneratedMerge(result: MergeResult) {
-    if (!confirm("Permanently delete this merged document and all of its generated versions, exports, and stored files? Original master and source DOCX files will be kept.")) return;
+    if (
+      !confirm(
+        "Permanently delete this merged document and all of its generated versions, exports, and stored files? Original master and source DOCX files will be kept.",
+      )
+    )
+      return;
     setDeletingMergeDocumentId(result.generated_document_id);
     try {
       await deleteGeneratedMerge(projectId, result.generated_document_id);
-      setResults((items) => items.filter((item) => item.generated_document_id !== result.generated_document_id));
-      setMessage("Merged document and its stored files were permanently deleted.");
+      setResults((items) =>
+        items.filter(
+          (item) => item.generated_document_id !== result.generated_document_id,
+        ),
+      );
+      setMessage(
+        "Merged document and its stored files were permanently deleted.",
+      );
     } catch {
-      setMessage("The merged document could not be deleted. No database records were removed.");
+      setMessage(
+        "The merged document could not be deleted. No database records were removed.",
+      );
     } finally {
       setDeletingMergeDocumentId(null);
     }
@@ -247,9 +313,13 @@ export default function MergePage() {
                     style={{ paddingLeft: 12 + (node.level - 1) * 14 }}
                     draggable
                     onDragStart={(event) => startDrag(event, doc, node)}
-                    onDragEnd={() => { setDragged(null); setDropTarget(null); }}
+                    onDragEnd={() => {
+                      setDragged(null);
+                      setDropTarget(null);
+                    }}
                     onDoubleClick={(event: MouseEvent) => {
-                      if ((event.target as HTMLElement).tagName !== "INPUT") chooseForPlacement(doc, node);
+                      if ((event.target as HTMLElement).tagName !== "INPUT")
+                        chooseForPlacement(doc, node);
                     }}
                     title="Double-click to select and place, or drag to a master gap"
                   >
@@ -284,34 +354,59 @@ export default function MergePage() {
             <span>{masterOutline.length} sections</span>
           </div>
           <section className={`master-paper ${dragged ? "is-dragging" : ""}`}>
-            {masterOutline.map((node, index) => <div key={node.node_key}>
-              {index === 0 && <div
-                className={`master-drop-zone ${dropTarget === `before:${node.node_key}` ? "is-drop-target" : ""}`}
-                onDragOver={(event) => allowDrop(event, `before:${node.node_key}`)}
-                onDragLeave={() => setDropTarget(null)}
-                onDrop={(event) => dropOn(event, node.node_key, "before")}
-              >Drop before {node.title}</div>}
-              <div
-                className={`master-node ${placementCandidate ? "master-node-selectable" : ""}`}
-                style={{ marginLeft: (node.level - 1) * 16 }}
-                onClick={() => placeCandidate(node.node_key, "after")}
-                title={placementCandidate ? "Click to insert the selected source section after this heading" : undefined}
-              >
-                <div>
-                  <strong>H{node.level} · {node.title}</strong>
-                  <small>Master blocks {node.block_index + 1}–{node.end_block_index + 1}</small>
+            {masterOutline.map((node, index) => (
+              <div key={node.node_key}>
+                {index === 0 && (
+                  <div
+                    className={`master-drop-zone ${dropTarget === `before:${node.node_key}` ? "is-drop-target" : ""}`}
+                    onDragOver={(event) =>
+                      allowDrop(event, `before:${node.node_key}`)
+                    }
+                    onDragLeave={() => setDropTarget(null)}
+                    onDrop={(event) => dropOn(event, node.node_key, "before")}
+                  >
+                    Drop before {node.title}
+                  </div>
+                )}
+                <div
+                  className={`master-node ${placementCandidate ? "master-node-selectable" : ""}`}
+                  style={{ marginLeft: (node.level - 1) * 16 }}
+                  onClick={() => placeCandidate(node.node_key, "after")}
+                  title={
+                    placementCandidate
+                      ? "Click to insert the selected source section after this heading"
+                      : undefined
+                  }
+                >
+                  <div>
+                    <strong>
+                      H{node.level} · {node.title}
+                    </strong>
+                    <small>
+                      Master blocks {node.block_index + 1}–
+                      {node.end_block_index + 1}
+                    </small>
+                  </div>
+                  {selected
+                    .filter((s) => s.destination === node.node_key)
+                    .map((s) => (
+                      <mark key={s.document.id + s.node.node_key}>
+                        {s.position}: {s.node.title}
+                      </mark>
+                    ))}
                 </div>
-                {selected.filter((s) => s.destination === node.node_key).map((s) => (
-                  <mark key={s.document.id + s.node.node_key}>{s.position}: {s.node.title}</mark>
-                ))}
+                <div
+                  className={`master-drop-zone ${dropTarget === `after:${node.node_key}` ? "is-drop-target" : ""}`}
+                  onDragOver={(event) =>
+                    allowDrop(event, `after:${node.node_key}`)
+                  }
+                  onDragLeave={() => setDropTarget(null)}
+                  onDrop={(event) => dropOn(event, node.node_key, "after")}
+                >
+                  Drop after {node.title}
+                </div>
               </div>
-              <div
-                className={`master-drop-zone ${dropTarget === `after:${node.node_key}` ? "is-drop-target" : ""}`}
-                onDragOver={(event) => allowDrop(event, `after:${node.node_key}`)}
-                onDragLeave={() => setDropTarget(null)}
-                onDrop={(event) => dropOn(event, node.node_key, "after")}
-              >Drop after {node.title}</div>
-            </div>)}
+            ))}
           </section>
           <section className="insertion-plan">
             <p className="eyebrow">INSERTION PLAN</p>
@@ -360,7 +455,17 @@ export default function MergePage() {
                     </option>
                   ))}
                 </select>
-                <button type="button" className="remove-selection" onClick={() => setSelected((items) => items.filter((_, index) => index !== i))}>Remove</button>
+                <button
+                  type="button"
+                  className="remove-selection"
+                  onClick={() =>
+                    setSelected((items) =>
+                      items.filter((_, index) => index !== i),
+                    )
+                  }
+                >
+                  Remove
+                </button>
               </div>
             ))}
           </section>
@@ -379,10 +484,14 @@ export default function MergePage() {
                   <button
                     type="button"
                     className="secondary delete-document"
-                    disabled={deletingMergeDocumentId === result.generated_document_id}
+                    disabled={
+                      deletingMergeDocumentId === result.generated_document_id
+                    }
                     onClick={() => removeGeneratedMerge(result)}
                   >
-                    {deletingMergeDocumentId === result.generated_document_id ? "Deleting merged document…" : "Delete merged document"}
+                    {deletingMergeDocumentId === result.generated_document_id
+                      ? "Deleting merged document…"
+                      : "Delete merged document"}
                   </button>
                 </p>
               ))}
@@ -394,19 +503,30 @@ export default function MergePage() {
               {compatibilityGroups.length || preview.warnings.length ? (
                 <>
                   {compatibilityGroups.map(([operationIndex, findings]) => (
-                    <article className="compatibility-section" key={operationIndex}>
+                    <article
+                      className="compatibility-section"
+                      key={operationIndex}
+                    >
                       <h3>Selection {operationIndex + 1}</h3>
                       <ul>
                         {findings.map((finding) => (
                           <li key={finding.code}>
-                            <strong>{finding.code.replace("compatibility.", "").replaceAll("_", " ")}</strong>
+                            <strong>
+                              {finding.code
+                                .replace("compatibility.", "")
+                                .replaceAll("_", " ")}
+                            </strong>
                             <span>{finding.message}</span>
                           </li>
                         ))}
                       </ul>
                     </article>
                   ))}
-                  {preview.warnings.length > 0 && <p className="compatibility-warnings">Warnings: {preview.warnings.join(" ")}</p>}
+                  {preview.warnings.length > 0 && (
+                    <p className="compatibility-warnings">
+                      Warnings: {preview.warnings.join(" ")}
+                    </p>
+                  )}
                 </>
               ) : (
                 <p className="compatibility-pass">

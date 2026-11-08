@@ -3,7 +3,9 @@ import { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-const apiOrigin = (process.env.IDMS_API_INTERNAL_URL ?? "http://api:8000").replace(/\/$/, "");
+const apiOrigin = (
+  process.env.IDMS_API_INTERNAL_URL ?? "http://api:8000"
+).replace(/\/$/, "");
 const requestTimeoutMs = 120_000;
 
 function upstreamHeaders(request: NextRequest) {
@@ -23,7 +25,10 @@ function responseHeaders(upstream: Response) {
   return headers;
 }
 
-async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
+async function proxy(
+  request: NextRequest,
+  context: { params: Promise<{ path: string[] }> },
+) {
   const { path } = await context.params;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
@@ -34,7 +39,10 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     const upstream = await fetch(url, {
       method,
       headers: upstreamHeaders(request),
-      body: method === "GET" || method === "HEAD" ? undefined : await request.arrayBuffer(),
+      body:
+        method === "GET" || method === "HEAD"
+          ? undefined
+          : await request.arrayBuffer(),
       cache: "no-store",
       redirect: "manual",
       signal: controller.signal,
@@ -44,9 +52,10 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
       headers: responseHeaders(upstream),
     });
   } catch (error) {
-    const message = error instanceof Error && error.name === "AbortError"
-      ? "The IDMS API took longer than two minutes to respond."
-      : "The IDMS API could not be reached.";
+    const message =
+      error instanceof Error && error.name === "AbortError"
+        ? "The IDMS API took longer than two minutes to respond."
+        : "The IDMS API could not be reached.";
     return Response.json({ detail: message }, { status: 504 });
   } finally {
     clearTimeout(timeout);

@@ -20,7 +20,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
   if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { detail?: string } | null;
+    const payload = (await response.json().catch(() => null)) as {
+      detail?: string;
+    } | null;
     throw new Error(payload?.detail ?? `IDMS API returned ${response.status}`);
   }
   return response.json() as Promise<T>;
@@ -109,6 +111,11 @@ export const selectMaster = (projectId: string, documentId: string) =>
   request<Document[]>(`/projects/${projectId}/master-document`, {
     method: "PUT",
     body: JSON.stringify({ document_id: documentId }),
+  });
+export const removeMaster = (projectId: string) =>
+  request<Document[]>(`/projects/${projectId}/master-document`, {
+    method: "PUT",
+    body: JSON.stringify({ document_id: null }),
   });
 export const getOutline = (documentId: string) =>
   request<OutlineNode[]>(`/documents/${documentId}/outline`, {

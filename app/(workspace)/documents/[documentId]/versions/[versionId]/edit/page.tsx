@@ -111,20 +111,28 @@ export default function EditorPage() {
   }, [mode, query, versionId]);
 
   async function saveNewVersion() {
-    if (!sessionRef.current || mode !== "edit" || saving || savedVersionId) return;
+    if (!sessionRef.current || mode !== "edit" || saving || savedVersionId)
+      return;
     setSaving(true);
     setMessage("Requesting ONLYOFFICE to save a new immutable version…");
     try {
-      const response = await fetch(`${api}/editor-sessions/${sessionRef.current}/save`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: changeSummary || undefined }),
-      });
+      const response = await fetch(
+        `${api}/editor-sessions/${sessionRef.current}/save`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ description: changeSummary || undefined }),
+        },
+      );
       if (!response.ok) throw new Error(await response.text());
-      setMessage("Saving in ONLYOFFICE… IDMS will add the next version shortly.");
+      setMessage(
+        "Saving in ONLYOFFICE… IDMS will add the next version shortly.",
+      );
     } catch {
       setSaving(false);
-      setMessage("IDMS could not start the save. Your editor remains open; try again.");
+      setMessage(
+        "IDMS could not start the save. Your editor remains open; try again.",
+      );
     }
   }
   return (
@@ -140,15 +148,35 @@ export default function EditorPage() {
         </div>
         <div className="editor-controls">
           <p className="muted editor-status">{message}</p>
-          {mode === "edit" && !savedVersionId && <>
-            <label className="editor-summary">Change summary
-              <input value={changeSummary} onChange={(event) => setChangeSummary(event.target.value)} maxLength={1000} placeholder="e.g. Updated deployment requirements" />
-            </label>
-            <button type="button" className="editor-save" disabled={saving} onClick={saveNewVersion}>
-              {saving ? "Saving new version…" : "Save new version"}
-            </button>
-          </>}
-          {savedVersionId && <a className="button editor-history" href={`/documents/${documentId}/versions`}>View version history →</a>}
+          {mode === "edit" && !savedVersionId && (
+            <>
+              <label className="editor-summary">
+                Change summary
+                <input
+                  value={changeSummary}
+                  onChange={(event) => setChangeSummary(event.target.value)}
+                  maxLength={1000}
+                  placeholder="e.g. Updated deployment requirements"
+                />
+              </label>
+              <button
+                type="button"
+                className="editor-save"
+                disabled={saving}
+                onClick={saveNewVersion}
+              >
+                {saving ? "Saving new version…" : "Save new version"}
+              </button>
+            </>
+          )}
+          {savedVersionId && (
+            <a
+              className="button editor-history"
+              href={`/documents/${documentId}/versions`}
+            >
+              View version history →
+            </a>
+          )}
         </div>
       </header>
       <div ref={holder} id="onlyoffice-editor" className="editor-frame" />
