@@ -10,8 +10,10 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
 
 COPY . .
 
-ARG NEXT_PUBLIC_IDMS_API_URL=http://localhost:8000/api/v1
+ARG NEXT_PUBLIC_IDMS_API_URL=/api/v1
+ARG IDMS_API_INTERNAL_URL=http://api:8000
 ENV NEXT_PUBLIC_IDMS_API_URL=$NEXT_PUBLIC_IDMS_API_URL
+ENV IDMS_API_INTERNAL_URL=$IDMS_API_INTERNAL_URL
 
 RUN --mount=type=cache,target=/app/.next/cache \
     npm run build
