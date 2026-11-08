@@ -118,18 +118,52 @@ export default function MergePage() {
   }
   function startDrag(event: DragEvent, document: Document, node: OutlineNode) {
     event.dataTransfer.effectAllowed = "move";
+    // The browser drag payload is the source of truth at drop time. React state
+    // updates from dragstart are asynchronous, so relying on `dragged` alone
+    // can leave an earlier checkbox placement in the insertion plan.
+    event.dataTransfer.setData(
+      "application/x-idms-outline-section",
+      JSON.stringify({ documentId: document.id, nodeKey: node.node_key }),
+    );
     event.dataTransfer.setData("text/plain", `${document.id}:${node.node_key}`);
-    setDragged({ document, node });
-    chooseForPlacement(document, node);
+    const candidate = { document, node };
+    setDragged(candidate);
+    setPlacementCandidate(candidate);
+    setMessage(`Drag “${node.title}” to a labelled master gap. The gap label is the exact insertion point.`);
   }
   function allowDrop(event: DragEvent, target: string) {
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     setDropTarget(target);
   }
+  function candidateFromDrag(event: DragEvent) {
+    try {
+      const data = event.dataTransfer.getData("application/x-idms-outline-section");
+      if (data) {
+        const { documentId, nodeKey } = JSON.parse(data) as { documentId: string; nodeKey: string };
+        const document = sources.find((item) => item.id === documentId);
+        const node = document ? outlines[document.id]?.find((item) => item.node_key === nodeKey) : undefined;
+        if (document && node) return { document, node };
+      }
+    } catch {
+      // Fall back to the current drag state for browsers that do not retain a
+      // custom MIME type during a same-page drag.
+    }
+    return dragged;
+  }
   function dropOn(event: DragEvent, destination: string | null, position: "before" | "after") {
     event.preventDefault();
-    if (dragged) upsertSelection(dragged, destination, position);
+    event.stopPropagation();
+    const candidate = candidateFromDrag(event);
+    if (candidate) {
+      upsertSelection(candidate, destination, position);
+      const destinationTitle = destination
+        ? masterOutline.find((node) => node.node_key === destination)?.title
+        : "the start of the document";
+      setMessage(`Planned “${candidate.node.title}” ${position} “${destinationTitle}”.`);
+    } else {
+      setMessage("That drop could not identify the source section. Drag it again from its source row.");
+    }
     setDragged(null);
     setDropTarget(null);
   }
@@ -143,14 +177,12 @@ export default function MergePage() {
     }));
   async function check() {
     setChecking(true);
-    setMessage("Checking compatibility…");
+    setMessage("Checking compatibility… Large DOCX files can take up to two minutes.");
     try {
       setPreview(await previewMerge(projectId, operations()));
       setMessage("Compatibility results are shown below.");
-    } catch {
-      setMessage(
-        "Compatibility check failed. Confirm selected files are analyzed.",
-      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Compatibility check failed.");
     } finally {
       setChecking(false);
     }

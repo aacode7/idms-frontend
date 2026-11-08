@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { createProject, deleteProject, listProjects } from "../lib/api/projects";
 import type { Project } from "../types/contracts";
 
@@ -12,6 +12,7 @@ export function Dashboard() {
   const [menuProjectId, setMenuProjectId] = useState<string | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const deleteInFlight = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +57,8 @@ export function Dashboard() {
   }
 
   async function confirmDelete() {
-    if (!projectToDelete) return;
+    if (!projectToDelete || deleteInFlight.current) return;
+    deleteInFlight.current = true;
     setDeleting(true);
     try {
       await deleteProject(projectToDelete.id);
@@ -68,6 +70,7 @@ export function Dashboard() {
       setMessage("The project could not be deleted. Its records were kept so you can retry safely.");
       setState("error");
     } finally {
+      deleteInFlight.current = false;
       setDeleting(false);
     }
   }

@@ -19,7 +19,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
-  if (!response.ok) throw new Error(`IDMS API returned ${response.status}`);
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { detail?: string } | null;
+    throw new Error(payload?.detail ?? `IDMS API returned ${response.status}`);
+  }
   return response.json() as Promise<T>;
 }
 
@@ -36,7 +39,11 @@ export async function deleteProject(projectId: string): Promise<void> {
   const response = await fetch(`${apiUrl}/projects/${projectId}`, {
     method: "DELETE",
   });
-  if (!response.ok) throw new Error(`IDMS API returned ${response.status}`);
+  // A repeated click can arrive after the first DELETE completed. In that
+  // case a 404 means the intended end state has already been reached.
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`IDMS API returned ${response.status}`);
+  }
 }
 export const listDocuments = (projectId: string) =>
   request<Document[]>(`/projects/${projectId}/documents`, {
