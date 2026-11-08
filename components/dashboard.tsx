@@ -14,10 +14,29 @@ export function Dashboard() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    listProjects().then(setProjects).then(() => setState("ready")).catch(() => {
-      setState("error");
-      setMessage("IDMS API is unavailable. Start the backend on port 8000 and refresh.");
-    });
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let attempts = 0;
+    const loadProjects = async () => {
+      try {
+        const values = await listProjects();
+        if (cancelled) return;
+        setProjects(values);
+        setMessage("");
+        setState("ready");
+      } catch {
+        if (cancelled) return;
+        attempts += 1;
+        setState("error");
+        setMessage("IDMS API is temporarily unavailable. Retrying automatically…");
+        retryTimer = setTimeout(loadProjects, Math.min(3000 * attempts, 15000));
+      }
+    };
+    void loadProjects();
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
