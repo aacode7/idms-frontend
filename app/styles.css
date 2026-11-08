@@ -1082,3 +1082,67 @@ small {
     transform: rotate(360deg);
   }
 }
+.compatibility-choice {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  margin-top: 2px;
+  padding: 7px 9px;
+  border: 1px solid #b9ddd8;
+  border-radius: 7px;
+  background: #f3fffd;
+  color: #08706f;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.compatibility-choice input { width: auto; margin: 0; accent-color: #0faeaa; }
+.compatibility-required { grid-column: 2; color: #667b92; font-size: 0.72rem; }
+.compatibility-guidance {
+  margin: -2px 0 14px;
+  color: #667b92;
+  font-size: 0.82rem;
+}
+.compatibility-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #dbe5ef;
+  border-radius: 8px;
+}
+.compatibility-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.compatibility-table th,
+.compatibility-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e4ebf2;
+  vertical-align: top;
+  text-align: left;
+}
+.compatibility-table thead th {
+  background: #f1f7ff;
+  color: #31577a;
+  font-size: 0.69rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.compatibility-table tbody th {
+  width: 15%;
+  color: #2457d6;
+  text-transform: capitalize;
+}
+.compatibility-table td:nth-child(2) { width: 24%; color: #526d87; }
+.compatibility-table td:nth-child(3) { width: 39%; color: #526d87; }
+.compatibility-table td:nth-child(3) strong,
+.compatibility-table td:nth-child(3) span { display: block; }
+.compatibility-table td:nth-child(3) strong { color: #17324f; margin-bottom: 3px; }
+.compatibility-table td:last-child { width: 22%; }
+.compatibility-table tr:last-child th,
+.compatibility-table tr:last-child td { border-bottom: 0; }
+.compatibility-table .compatibility-choice { width: auto; margin: 0; white-space: nowrap; }
+.compatibility-table .compatibility-required { display: inline-block; margin-top: 7px; }

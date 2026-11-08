@@ -50,6 +50,13 @@ export type Diagnostic = {
   severity: "info" | "warning" | "error";
   message: string;
   operation_index: number | null;
+  resolution_key: string | null;
+  resolution_label: string | null;
+  resolution_default: boolean | null;
+  resolution_required: boolean;
+  source_value: string | null;
+  master_value: string | null;
+  merge_effect: string | null;
 };
 export type MergePreview = { warnings: string[]; diagnostics: Diagnostic[] };
 export type MergeResult = {

@@ -1,5 +1,5 @@
 "use client";
-import { DragEvent, MouseEvent, useEffect, useMemo, useState } from "react";
+import { DragEvent, MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   createMergeJob,
@@ -22,6 +22,29 @@ type Selection = {
   node: OutlineNode;
   destination: string | null;
   position: "before" | "after";
+  resolutionOptions: {
+    inherit_heading_format: boolean;
+    adopt_heading_style: boolean;
+    adopt_heading_font: boolean;
+    adopt_heading_size: boolean;
+    adopt_heading_colour: boolean;
+    adopt_heading_emphasis: boolean;
+    adopt_heading_paragraph_format: boolean;
+    renumber_manual_headings: boolean;
+    normalise_tables: boolean;
+  };
+};
+
+const defaultResolutionOptions: Selection["resolutionOptions"] = {
+  inherit_heading_format: true,
+  adopt_heading_style: true,
+  adopt_heading_font: true,
+  adopt_heading_size: true,
+  adopt_heading_colour: true,
+  adopt_heading_emphasis: true,
+  adopt_heading_paragraph_format: true,
+  renumber_manual_headings: true,
+  normalise_tables: true,
 };
 
 export default function MergePage() {
@@ -46,6 +69,7 @@ export default function MergePage() {
       "document" | "node"
     > | null>(null),
     [dropTarget, setDropTarget] = useState<string | null>(null);
+  const deletingMergeRef = useRef<string | null>(null);
   const master = useMemo(() => docs.find((d) => d.role === "master"), [docs]);
   const sources = docs.filter(
     (d) => d.role === "source" || d.role === "master_candidate",
@@ -91,6 +115,7 @@ export default function MergePage() {
               node,
               destination: masterOutline[0]?.node_key ?? null,
               position: "after",
+              resolutionOptions: defaultResolutionOptions,
             },
           ]
         : v.filter(
@@ -115,7 +140,12 @@ export default function MergePage() {
           item.document.id === candidate.document.id &&
           item.node.node_key === candidate.node.node_key,
       );
-      const next = { ...candidate, destination, position };
+      const next = {
+        ...candidate,
+        destination,
+        position,
+        resolutionOptions: existing?.resolutionOptions ?? defaultResolutionOptions,
+      };
       return existing
         ? items.map((item) => (item === existing ? next : item))
         : [...items, next];
@@ -223,7 +253,24 @@ export default function MergePage() {
       destination_node_key: s.destination,
       position: s.position,
       sort_order,
+      resolution_options: s.resolutionOptions,
     }));
+  function setResolution(
+    operationIndex: number,
+    key: keyof Selection["resolutionOptions"],
+    enabled: boolean,
+  ) {
+    setSelected((items) =>
+      items.map((item, index) =>
+        index === operationIndex
+          ? { ...item, resolutionOptions: { ...item.resolutionOptions, [key]: enabled } }
+          : item,
+      ),
+    );
+    setMessage(
+      "Compatibility choices updated. The checked adjustments will be applied to the new immutable merge.",
+    );
+  }
   async function check() {
     setChecking(true);
     setMessage(
@@ -258,12 +305,14 @@ export default function MergePage() {
     }, 2000);
   }
   async function removeGeneratedMerge(result: MergeResult) {
+    if (deletingMergeRef.current === result.generated_document_id) return;
     if (
       !confirm(
         "Permanently delete this merged document and all of its generated versions, exports, and stored files? Original master and source DOCX files will be kept.",
       )
     )
       return;
+    deletingMergeRef.current = result.generated_document_id;
     setDeletingMergeDocumentId(result.generated_document_id);
     try {
       await deleteGeneratedMerge(projectId, result.generated_document_id);
@@ -280,6 +329,7 @@ export default function MergePage() {
         "The merged document could not be deleted. No database records were removed.",
       );
     } finally {
+      deletingMergeRef.current = null;
       setDeletingMergeDocumentId(null);
     }
   }
@@ -500,6 +550,10 @@ export default function MergePage() {
           {preview && (
             <section className="merge-diagnostics">
               <p className="eyebrow">COMPATIBILITY RESULTS</p>
+              <p className="compatibility-guidance">
+                Choose the formatting adjustments to apply. Required safeguards
+                are kept on to preserve a valid master document.
+              </p>
               {compatibilityGroups.length || preview.warnings.length ? (
                 <>
                   {compatibilityGroups.map(([operationIndex, findings]) => (
@@ -508,18 +562,66 @@ export default function MergePage() {
                       key={operationIndex}
                     >
                       <h3>Selection {operationIndex + 1}</h3>
-                      <ul>
-                        {findings.map((finding) => (
-                          <li key={finding.code}>
-                            <strong>
-                              {finding.code
-                                .replace("compatibility.", "")
-                                .replaceAll("_", " ")}
-                            </strong>
-                            <span>{finding.message}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="compatibility-table-wrap">
+                        <table className="compatibility-table">
+                          <thead>
+                            <tr>
+                              <th scope="col">Property</th>
+                              <th scope="col">Source section</th>
+                              <th scope="col">Master / merge result</th>
+                              <th scope="col">Apply</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {findings.map((finding) => (
+                              <tr key={finding.code}>
+                                <th scope="row">
+                                  {finding.code
+                                    .replace("compatibility.", "")
+                                    .replaceAll("_", " ")}
+                                </th>
+                                <td>{finding.source_value ?? "—"}</td>
+                                <td>
+                                  <strong>{finding.master_value ?? "—"}</strong>
+                                  <span>{finding.merge_effect ?? finding.message}</span>
+                                </td>
+                                <td>
+                                  {finding.resolution_key && !finding.resolution_required ? (
+                                    <label className="compatibility-choice">
+                                      <input
+                                        type="checkbox"
+                                        checked={
+                                          selected[operationIndex]?.resolutionOptions[
+                                            finding.resolution_key as keyof Selection["resolutionOptions"]
+                                          ] ?? finding.resolution_default ?? true
+                                        }
+                                        onChange={(event) =>
+                                          setResolution(
+                                            operationIndex,
+                                            finding.resolution_key as keyof Selection["resolutionOptions"],
+                                            event.target.checked,
+                                          )
+                                        }
+                                      />
+                                      {selected[operationIndex]?.resolutionOptions[
+                                        finding.resolution_key as keyof Selection["resolutionOptions"]
+                                      ] ?? finding.resolution_default ?? true
+                                        ? "Apply"
+                                        : "Keep source"}
+                                    </label>
+                                  ) : finding.resolution_required ? (
+                                    <small className="compatibility-required">
+                                      Required
+                                    </small>
+                                  ) : (
+                                    <small className="compatibility-required">Info</small>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </article>
                   ))}
                   {preview.warnings.length > 0 && (

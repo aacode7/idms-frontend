@@ -59,7 +59,11 @@ export async function deleteDocument(
     `${apiUrl}/projects/${projectId}/documents/${documentId}`,
     { method: "DELETE" },
   );
-  if (!response.ok) throw new Error(`IDMS API returned ${response.status}`);
+  // A duplicate click after a completed delete means the intended state has
+  // already been reached, so treat 404 as a successful idempotent delete.
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`IDMS API returned ${response.status}`);
+  }
 }
 export async function deleteGeneratedMerge(
   projectId: string,
@@ -69,7 +73,11 @@ export async function deleteGeneratedMerge(
     `${apiUrl}/projects/${projectId}/merged-documents/${documentId}`,
     { method: "DELETE" },
   );
-  if (!response.ok) throw new Error(`IDMS API returned ${response.status}`);
+  // Deleting an already-deleted generated merge has reached the same end
+  // state; a repeated browser event must not turn that into an error.
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`IDMS API returned ${response.status}`);
+  }
 }
 
 export const createUploadIntent = (
@@ -129,6 +137,17 @@ export const createMergeJob = (
     destination_node_key: string | null;
     position: "before" | "after";
     sort_order: number;
+    resolution_options: {
+      inherit_heading_format: boolean;
+      adopt_heading_style: boolean;
+      adopt_heading_font: boolean;
+      adopt_heading_size: boolean;
+      adopt_heading_colour: boolean;
+      adopt_heading_emphasis: boolean;
+      adopt_heading_paragraph_format: boolean;
+      renumber_manual_headings: boolean;
+      normalise_tables: boolean;
+    };
   }>,
 ) =>
   request<Job>(`/projects/${projectId}/merge-jobs`, {
@@ -143,6 +162,17 @@ export const previewMerge = (
     destination_node_key: string | null;
     position: "before" | "after";
     sort_order: number;
+    resolution_options: {
+      inherit_heading_format: boolean;
+      adopt_heading_style: boolean;
+      adopt_heading_font: boolean;
+      adopt_heading_size: boolean;
+      adopt_heading_colour: boolean;
+      adopt_heading_emphasis: boolean;
+      adopt_heading_paragraph_format: boolean;
+      renumber_manual_headings: boolean;
+      normalise_tables: boolean;
+    };
   }>,
 ) =>
   request<MergePreview>(`/projects/${projectId}/merge-preview`, {
