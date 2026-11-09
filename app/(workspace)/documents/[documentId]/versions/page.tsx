@@ -21,6 +21,13 @@ export default function VersionsPage() {
   const [description, setDescription] = useState("");
   const [actor, setActor] = useState("Local user");
   const [comparison, setComparison] = useState<VersionComparison | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const latest = versions.find((version) => version.is_latest);
+  const focused =
+    versions.find((version) => version.id === focusedId) ??
+    latest ??
+    versions[0] ??
+    null;
 
   const reload = () =>
     listVersions(documentId)
@@ -29,8 +36,6 @@ export default function VersionsPage() {
   useEffect(() => {
     reload();
   }, [documentId]);
-  const latest = versions.find((version) => version.is_latest);
-
   function startEdit(event: FormEvent) {
     event.preventDefault();
     if (!selected || !latest) return;
@@ -78,115 +83,178 @@ export default function VersionsPage() {
   }
 
   return (
-    <main className="shell">
-      <a href="/dashboard">← Dashboard</a>
-      <p className="eyebrow">VERSION HISTORY</p>
-      <h1>Document versions</h1>
-      <p className="muted">
-        Every save, restore, and merge is recorded as a new immutable version.
-        Nothing here overwrites history.
-      </p>
+    <main className="workspace-shell">
+      <header className="workspace-header">
+        <div>
+          <a href="/dashboard" className="workspace-back">
+            ← Dashboard
+          </a>
+          <p className="eyebrow">DOCUMENT WORKSPACE</p>
+          <h1>Document library</h1>
+        </div>
+        <span className="workspace-status">● All changes are versioned</span>
+      </header>
       {error && (
         <p className="feedback error" role="alert">
           {error}
         </p>
       )}
-      <label className="field">
-        Local actor name{" "}
-        <input
-          value={actor}
-          onChange={(event) => setActor(event.target.value)}
-          maxLength={255}
-        />
-      </label>
-      <section className="panel">
-        {versions.length === 0 ? (
-          <p className="muted">No versions exist yet.</p>
-        ) : (
-          <div className="version-list">
-            {versions.map((version) => (
-              <article
-                key={version.id}
-                className={
-                  version.is_latest ? "version-row latest" : "version-row"
-                }
-              >
-                <div>
-                  <strong>
-                    v{version.version_number}
-                    {version.is_latest ? " · Latest" : ""}
-                  </strong>
-                  <small>
-                    {new Date(version.created_at).toLocaleString()} ·{" "}
-                    {version.created_by}
-                  </small>
-                  <p>{version.description || "No description supplied."}</p>
-                </div>
-                <div className="version-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() =>
-                      router.push(
-                        `/documents/${documentId}/versions/${version.id}/edit?mode=view`,
-                      )
-                    }
-                  >
-                    View
-                  </button>
-                  <a className="button secondary" href={version.download_url}>
-                    Download
-                  </a>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={version.is_latest}
-                    onClick={() => compare(version)}
-                  >
-                    Compare latest
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => restore(version)}
-                  >
-                    Restore
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelected(version);
-                      setDescription(
-                        version.is_latest
-                          ? ""
-                          : `Edited from v${version.version_number}`,
-                      );
-                    }}
-                  >
-                    Edit / Save new version
-                  </button>
-                </div>
-              </article>
-            ))}
+      <div className="notebook-layout">
+        <aside className="notebook-pane source-pane">
+          <div className="pane-heading">
+            <div>
+              <p className="eyebrow">SOURCES</p>
+              <h2>Uploaded documents</h2>
+            </div>
+            <span className="count-badge">{versions.length}</span>
           </div>
-        )}
-      </section>
-      {comparison && (
-        <section className="panel">
-          <h2>
-            v{comparison.base_version_number} → v
-            {comparison.target_version_number}
-          </h2>
-          <p>
-            {comparison.changed
-              ? "Text and table changes detected."
-              : "No textual changes detected."}
-          </p>
-          <pre className="diff">
-            {comparison.diff.join("\n") || "No differences."}
-          </pre>
+          <p className="pane-help">Your original files and saved versions.</p>
+          {versions.length === 0 ? (
+            <p className="muted">No versions exist yet.</p>
+          ) : (
+            <div className="version-list">
+              {versions.map((version) => (
+                <article
+                  key={version.id}
+                  onClick={() => setFocusedId(version.id)}
+                  className={`version-row ${version.is_latest ? "latest" : ""} ${focused?.id === version.id ? "active" : ""}`}
+                >
+                  <div>
+                    <strong>
+                      {version.is_latest
+                        ? "Master document"
+                        : `Document version ${version.version_number}`}
+                    </strong>
+                    <small>
+                      v{version.version_number} ·{" "}
+                      {new Date(version.created_at).toLocaleDateString()}
+                    </small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </aside>
+        <section className="notebook-pane document-pane">
+          <p className="eyebrow">DOCUMENT PREVIEW</p>
+          <div className="document-title-row">
+            <div>
+              <h2>
+                {focused
+                  ? `Version ${focused.version_number}`
+                  : "No document selected"}
+              </h2>
+              <p className="muted">
+                {focused?.description ||
+                  "Select a source to inspect its details."}
+              </p>
+            </div>
+            {focused?.is_latest && <span className="master-pill">MASTER</span>}
+          </div>
+          <div className="document-canvas">
+            {focused ? (
+              <>
+                <div className="canvas-icon">DOCX</div>
+                <h3>
+                  {focused.is_latest
+                    ? "Master document"
+                    : `Saved version ${focused.version_number}`}
+                </h3>
+                <p>
+                  This version is immutable. Open it in the editor to inspect or
+                  create a new version.
+                </p>
+                <span className="canvas-meta">
+                  Created {new Date(focused.created_at).toLocaleString()} by{" "}
+                  {focused.created_by}
+                </span>
+              </>
+            ) : (
+              <p className="muted">Your selected document will appear here.</p>
+            )}
+          </div>
+          {comparison && (
+            <div className="comparison-card">
+              <h3>
+                v{comparison.base_version_number} → v
+                {comparison.target_version_number}
+              </h3>
+              <p>
+                {comparison.changed
+                  ? "Text and table changes detected."
+                  : "No textual changes detected."}
+              </p>
+              <pre className="diff">
+                {comparison.diff.join("\n") || "No differences."}
+              </pre>
+            </div>
+          )}
         </section>
-      )}
+        <aside className="notebook-pane actions-pane">
+          <p className="eyebrow">SELECTED SOURCE</p>
+          <h2>
+            {focused ? `Version ${focused.version_number}` : "Nothing selected"}
+          </h2>
+          <div className="action-stack">
+            <button
+              type="button"
+              onClick={() =>
+                focused &&
+                router.push(
+                  `/documents/${documentId}/versions/${focused.id}/edit?mode=view`,
+                )
+              }
+              disabled={!focused}
+            >
+              Open document
+            </button>
+            <a className="button secondary" href={focused?.download_url}>
+              Download file
+            </a>
+            <button
+              type="button"
+              className="secondary"
+              disabled={!focused || focused.is_latest}
+              onClick={() => focused && compare(focused)}
+            >
+              Compare with master
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={!focused}
+              onClick={() => focused && restore(focused)}
+            >
+              Restore as new version
+            </button>
+          </div>
+          <label className="field actor-field">
+            Editor name
+            <input
+              value={actor}
+              onChange={(event) => setActor(event.target.value)}
+              maxLength={255}
+            />
+          </label>
+          <button
+            type="button"
+            className="save-version"
+            disabled={!focused}
+            onClick={() => {
+              if (focused) {
+                setSelected(focused);
+                setDescription(
+                  focused.is_latest
+                    ? ""
+                    : `Edited from v${focused.version_number}`,
+                );
+              }
+            }}
+          >
+            Edit & save new version
+          </button>
+        </aside>
+      </div>
       {selected && (
         <div className="dialog-backdrop" role="presentation">
           <form className="dialog" onSubmit={startEdit}>

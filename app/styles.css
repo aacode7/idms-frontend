@@ -20,6 +20,228 @@ body {
   margin: auto;
   padding: 28px 24px 72px;
 }
+.workspace-shell {
+  width: min(1500px, 100%);
+  margin: auto;
+  padding: 28px clamp(18px, 4vw, 56px) 56px;
+}
+.workspace-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.workspace-header h1 {
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  margin: 0.35rem 0 0;
+}
+.workspace-back {
+  color: var(--blue);
+  font-weight: 700;
+  text-decoration: none;
+}
+.workspace-status {
+  color: #187a69;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding-bottom: 8px;
+}
+.notebook-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 270px;
+  gap: 14px;
+  align-items: start;
+}
+.notebook-pane {
+  min-height: 590px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px;
+  box-shadow: 0 8px 24px rgba(24, 48, 80, 0.045);
+}
+.source-pane {
+  background: #fdfefe;
+}
+.pane-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 8px;
+}
+.pane-heading h2,
+.actions-pane h2,
+.document-pane h2 {
+  font-size: 1.25rem;
+  margin: 0.2rem 0 0.65rem;
+}
+.count-badge,
+.master-pill {
+  background: #e9f8f5;
+  color: #087c70;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 5px 8px;
+}
+.pane-help {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin: 0 0 20px;
+}
+.version-list {
+  display: grid;
+  gap: 8px;
+}
+.version-row {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 13px 12px;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+.version-row:hover {
+  background: #f4f8ff;
+  border-color: #d9e4f8;
+}
+.version-row.active {
+  background: #edf4ff;
+  border-color: #b9cff5;
+  box-shadow: inset 3px 0 var(--blue);
+}
+.version-row strong,
+.version-row small {
+  display: block;
+}
+.version-row strong {
+  font-size: 0.82rem;
+}
+.version-row small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  margin-top: 5px;
+}
+.document-pane {
+  padding: 28px;
+}
+.document-title-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 20px;
+}
+.document-title-row .muted {
+  margin: 0;
+}
+.document-canvas {
+  min-height: 360px;
+  margin-top: 22px;
+  border: 1px dashed #cbd7e5;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fbfcfe, #f5f8fb);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 32px;
+}
+.canvas-icon {
+  color: #fff;
+  background: #2457d6;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 15px 10px;
+  margin-bottom: 16px;
+  box-shadow: 0 8px 16px #2457d633;
+}
+.document-canvas h3 {
+  margin: 0 0 8px;
+}
+.document-canvas p {
+  max-width: 360px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0 0 14px;
+}
+.canvas-meta {
+  color: #8090a3;
+  font-size: 0.75rem;
+}
+.action-stack {
+  display: grid;
+  gap: 9px;
+  margin: 24px 0 30px;
+}
+.action-stack button,
+.action-stack .button,
+.save-version {
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
+}
+.actor-field {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.actor-field input {
+  margin-top: 8px;
+  font-size: 0.86rem;
+}
+.save-version {
+  background: var(--navy);
+  color: white;
+}
+.comparison-card {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.comparison-card h3 {
+  margin: 0 0 5px;
+}
+.comparison-card p {
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+@media (max-width: 1050px) {
+  .notebook-layout {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .actions-pane {
+    grid-column: 1 / -1;
+    min-height: auto;
+  }
+  .action-stack {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+@media (max-width: 700px) {
+  .workspace-header {
+    display: block;
+  }
+  .workspace-status {
+    display: block;
+    margin-top: 14px;
+  }
+  .notebook-layout {
+    grid-template-columns: 1fr;
+  }
+  .notebook-pane {
+    min-height: auto;
+  }
+  .document-canvas {
+    min-height: 260px;
+  }
+  .action-stack {
+    grid-template-columns: 1fr;
+  }
+}
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -1229,6 +1451,38 @@ small {
 .master-pane {
   padding: clamp(20px, 3vw, 30px);
 }
+/* The merge workspace keeps sources, the master map, and the insertion plan visible together. */
+@media (min-width: 1051px) {
+  .merge-layout {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    align-items: start;
+  }
+  .master-pane {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 18px;
+  }
+  .master-heading,
+  .merge-diagnostics {
+    grid-column: 1 / -1;
+  }
+  .master-paper {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .insertion-plan {
+    grid-column: 2;
+    grid-row: 2;
+    margin-top: 0;
+    align-self: start;
+  }
+}
+@media (max-width: 1050px) {
+  .master-pane {
+    display: block;
+  }
+}
 .pane-heading,
 .plan-heading {
   display: flex;
@@ -1543,6 +1797,34 @@ small {
 .compatibility-table tr:last-child td {
   border-bottom: 0;
 }
+
+/* Final merge workspace layout: sources | master map | insertion plan. */
+@media (min-width: 1051px) {
+  .merge-layout {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    align-items: start;
+  }
+  .merge-layout > .master-pane {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 18px;
+  }
+  .merge-layout > .master-pane .master-heading,
+  .merge-layout > .master-pane .merge-diagnostics {
+    grid-column: 1 / -1;
+  }
+  .merge-layout > .master-pane .master-paper {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .merge-layout > .master-pane .insertion-plan {
+    grid-column: 2;
+    grid-row: 2;
+    margin-top: 0;
+    align-self: start;
+  }
+}
 .compatibility-table .compatibility-choice {
   width: auto;
   margin: 0;
@@ -1551,4 +1833,15 @@ small {
 .compatibility-table .compatibility-required {
   display: inline-block;
   margin-top: 7px;
+}
+
+@media (min-width: 1051px) {
+  .merge-shell { min-height: 100dvh; }
+  .merge-layout { grid-template-columns: 250px minmax(0, 1fr) 300px; align-items: stretch; min-height: calc(100dvh - 260px); }
+  .merge-layout > .source-pane { grid-column: 1; grid-row: 1; min-height: 620px; overflow: auto; }
+  .merge-layout > .master-pane { display: contents; }
+  .merge-layout > .master-pane .master-heading { grid-column: 2; grid-row: 1; align-self: start; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
+  .merge-layout > .master-pane .master-paper { grid-column: 2; grid-row: 2; min-height: 500px; max-height: calc(100dvh - 350px); overflow: auto; margin-top: -1px; }
+  .merge-layout > .master-pane .insertion-plan { grid-column: 3; grid-row: 1 / span 2; margin: 0; align-self: stretch; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 22px; overflow: auto; }
+  .merge-layout > .master-pane .merge-diagnostics { grid-column: 2 / span 2; grid-row: 3; }
 }
