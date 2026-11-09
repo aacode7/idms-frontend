@@ -127,7 +127,10 @@ export async function uploadDocx(
     method: "PUT",
     headers: {
       "Content-Type":
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        file.type ||
+        (file.name.toLowerCase().endsWith(".pdf")
+          ? "application/pdf"
+          : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
     },
     body: file,
   });
@@ -137,6 +140,11 @@ export async function uploadDocx(
     { method: "POST", body: "{}" },
   );
 }
+export const convertPdf = (documentId: string) =>
+  request<Job>(`/documents/${documentId}/convert-pdf`, {
+    method: "POST",
+    body: "{}",
+  });
 
 export const selectMaster = (projectId: string, documentId: string) =>
   request<Document[]>(`/projects/${projectId}/master-document`, {

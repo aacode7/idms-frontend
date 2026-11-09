@@ -66,11 +66,23 @@ export default function EditorPage() {
       script.onload = () => {
         if (window.DocsAPI && holder.current) {
           const anchor = query.get("anchor");
-          if (anchor)
-            config.editorConfig = {
-              ...config.editorConfig,
-              actionLink: { action: { type: "bookmark", data: anchor } },
-            };
+          config.editorConfig = {
+            ...config.editorConfig,
+            ...(anchor
+              ? {
+                  actionLink: {
+                    action: { type: "bookmark", data: anchor },
+                  },
+                }
+              : {}),
+            customization: {
+              ...config.editorConfig.customization,
+              logo: {
+                ...config.editorConfig.customization?.logo,
+                visible: false,
+              },
+            },
+          };
           new window.DocsAPI.DocEditor("onlyoffice-editor", {
             ...config,
             width: "100%",
@@ -80,14 +92,15 @@ export default function EditorPage() {
           });
           setMessage(
             anchor
-              ? "Opening the merged section bookmark in ONLYOFFICE. Use Save to create a new immutable version."
+              ? "Opening the merged section bookmark in the document editor. Use Save to create a new immutable version."
               : mode === "view"
                 ? "Read-only version view."
-                : "Use ONLYOFFICE Save. IDMS will create the next immutable version automatically.",
+                : "Use the editor Save button. IDMS will create the next immutable version automatically.",
           );
         }
       };
-      script.onerror = () => setMessage("ONLYOFFICE could not be loaded.");
+      script.onerror = () =>
+        setMessage("The document editor could not be loaded.");
       document.body.appendChild(script);
       if (mode === "edit")
         timer = setInterval(async () => {
@@ -167,7 +180,7 @@ export default function EditorPage() {
         return;
       }
       setMessage(
-        "Saving in ONLYOFFICE… IDMS will add the next version shortly.",
+        "Saving in the document editor… IDMS will add the next version shortly.",
       );
     } catch {
       setSaving(false);
@@ -247,9 +260,13 @@ export default function EditorPage() {
           {mode === "edit" && !savedVersionId && (
             <>
               {mergeAnchors.length > 1 && (
-                <div className="editor-change-navigation" aria-label="Inserted section navigation">
+                <div
+                  className="editor-change-navigation"
+                  aria-label="Inserted section navigation"
+                >
                   <span>
-                    Inserted section {activeAnchorIndex + 1} of {mergeAnchors.length}
+                    Inserted section {activeAnchorIndex + 1} of{" "}
+                    {mergeAnchors.length}
                   </span>
                   <button
                     type="button"

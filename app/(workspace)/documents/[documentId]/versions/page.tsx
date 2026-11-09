@@ -74,9 +74,17 @@ export default function VersionsPage() {
   }
 
   async function compare(version: DocumentVersion) {
-    if (!latest || version.id === latest.id) return;
+    if (version.id === latest?.id) return;
+    if (!latest) return;
+    const latestVersion = latest;
+    if (version.comparison) {
+      setComparison(version.comparison);
+      return;
+    }
     try {
-      setComparison(await compareVersions(documentId, version.id, latest.id));
+      setComparison(
+        await compareVersions(documentId, version.id, latestVersion.id),
+      );
     } catch {
       setError("Versions could not be compared.");
     }
@@ -184,9 +192,29 @@ export default function VersionsPage() {
                   ? "Text and table changes detected."
                   : "No textual changes detected."}
               </p>
-              <pre className="diff">
-                {comparison.diff.join("\n") || "No differences."}
-              </pre>
+              <div className="diff" role="region" aria-label="Version changes">
+                {comparison.diff.length ? (
+                  comparison.diff.map((line, index) => {
+                    const added =
+                      line.startsWith("+") && !line.startsWith("+++");
+                    const removed =
+                      line.startsWith("-") && !line.startsWith("---");
+                    return (
+                      <div
+                        className={`diff-line ${added ? "added" : ""} ${removed ? "removed" : ""}`}
+                        key={`${index}-${line}`}
+                      >
+                        <span className="diff-marker" aria-hidden="true">
+                          {added ? "+" : removed ? "−" : " "}
+                        </span>
+                        <span>{line}</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="diff-empty">No differences.</div>
+                )}
+              </div>
             </div>
           )}
         </section>
@@ -217,7 +245,7 @@ export default function VersionsPage() {
               disabled={!focused || focused.is_latest}
               onClick={() => focused && compare(focused)}
             >
-              Compare with master
+              View changes from previous version
             </button>
             <button
               type="button"

@@ -4,6 +4,7 @@ import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   createUploadIntent,
+  convertPdf,
   deleteDocument,
   getProject,
   listDocuments,
@@ -11,6 +12,7 @@ import {
   removeMaster,
   selectMaster,
   uploadDocx,
+  getJob,
 } from "../../../../lib/api/projects";
 import type {
   Document,
@@ -29,6 +31,9 @@ export default function ProjectWorkspacePage() {
   >({});
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [convertingDocumentId, setConvertingDocumentId] = useState<
+    string | null
+  >(null);
   const [actionError, setActionError] = useState("");
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(
     null,
@@ -98,11 +103,12 @@ export default function ProjectWorkspacePage() {
     if (
       files.some(
         (file) =>
-          !file.name.toLowerCase().endsWith(".docx") ||
+          (!file.name.toLowerCase().endsWith(".docx") &&
+            !file.name.toLowerCase().endsWith(".pdf")) ||
           file.size > maxDocumentBytes,
       )
     ) {
-      setActionError("Only DOCX files up to 25 MB can be uploaded.");
+      setActionError("Only DOCX or PDF files up to 25 MB can be uploaded.");
       return;
     }
     setUploading(true);
@@ -120,7 +126,7 @@ export default function ProjectWorkspacePage() {
       }
       setDocuments((current) => [...current, ...completed]);
       setActionError(
-        `${completed.length} document${completed.length === 1 ? "" : "s"} uploaded. Analysis started automatically.`,
+        `${completed.length} document${completed.length === 1 ? "" : "s"} uploaded. DOCX analysis started automatically; PDFs can be converted below.`,
       );
     } catch {
       setActionError(
@@ -128,6 +134,33 @@ export default function ProjectWorkspacePage() {
       );
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function convertPdfDocument(document: Document) {
+    setConvertingDocumentId(document.id);
+    setActionError("");
+    try {
+      const job = await convertPdf(document.id);
+      const timer = window.setInterval(async () => {
+        const status = await getJob(job.id);
+        if (status.status === "completed" || status.status === "failed") {
+          window.clearInterval(timer);
+          setConvertingDocumentId(null);
+          if (status.status === "completed") {
+            setActionError(
+              "PDF converted to DOCX. Analysis started automatically.",
+            );
+            setDocuments(await listDocuments(projectId));
+          } else
+            setActionError(
+              "PDF conversion failed. Check the worker logs and try again.",
+            );
+        }
+      }, 2000);
+    } catch {
+      setConvertingDocumentId(null);
+      setActionError("PDF conversion could not be started.");
     }
   }
 
@@ -246,7 +279,7 @@ export default function ProjectWorkspacePage() {
             className="visually-hidden"
             ref={uploadInputRef}
             type="file"
-            accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept=".docx,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
             multiple
             onChange={handleFiles}
           />
@@ -256,7 +289,7 @@ export default function ProjectWorkspacePage() {
             onClick={() => uploadInputRef.current?.click()}
             disabled={workflowBusy}
           >
-            {uploading ? "Uploading…" : "Upload DOCX files"}
+            {uploading ? "Uploading…" : "Upload DOCX or PDF files"}
           </button>
           <p className="upload-assurance">
             Every completed upload is analyzed automatically.
@@ -289,13 +322,27 @@ export default function ProjectWorkspacePage() {
                   </span>
                   {document.status === "uploaded" && (
                     <span className="document-actions">
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => chooseMaster(document.id)}
-                      >
-                        Set as master
-                      </button>
+                      {document.filename.toLowerCase().endsWith(".pdf") && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={convertingDocumentId === document.id}
+                          onClick={() => convertPdfDocument(document)}
+                        >
+                          {convertingDocumentId === document.id
+                            ? "Converting…"
+                            : "Convert and replace PDF"}
+                        </button>
+                      )}
+                      {!document.filename.toLowerCase().endsWith(".pdf") && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => chooseMaster(document.id)}
+                        >
+                          Set as master
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="secondary delete-document"

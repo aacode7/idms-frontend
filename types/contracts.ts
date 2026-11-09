@@ -75,6 +75,7 @@ export type DocumentVersion = {
   parent_version_id: string | null;
   is_latest: boolean;
   download_url: string;
+  comparison: VersionComparison | null;
 };
 
 export type VersionComparison = {

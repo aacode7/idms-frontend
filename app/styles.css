@@ -209,6 +209,50 @@ body {
   color: var(--muted);
   margin: 0 0 12px;
 }
+.diff {
+  overflow: auto;
+  border: 1px solid #d9e1ea;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  font:
+    0.78rem/1.55 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.diff-line {
+  display: grid;
+  grid-template-columns: 28px minmax(max-content, 1fr);
+  min-width: max-content;
+  padding: 2px 10px 2px 0;
+  white-space: pre;
+}
+.diff-line.added {
+  background: #e6f6ea;
+  color: #166534;
+}
+.diff-line.removed {
+  background: #fdeaea;
+  color: #991b1b;
+}
+.diff-marker {
+  color: #64748b;
+  text-align: center;
+  user-select: none;
+}
+.added .diff-marker {
+  color: #15803d;
+  font-weight: 800;
+}
+.removed .diff-marker {
+  color: #b91c1c;
+  font-weight: 800;
+}
+.diff-empty {
+  padding: 14px;
+  color: #64748b;
+}
 @media (max-width: 1050px) {
   .notebook-layout {
     grid-template-columns: 220px minmax(0, 1fr);
@@ -1903,6 +1947,149 @@ small {
   color: #9aaabd;
   font-weight: 400;
   opacity: 1;
+}
+
+/* Merge workspace: restrained document-tool styling. */
+.merge-shell {
+  background: #f4f6f8;
+}
+.merge-header h1,
+.source-pane h2,
+.master-pane h2,
+.plan-heading h2 {
+  color: #172b4d;
+  letter-spacing: -0.02em;
+}
+.merge-header h1 {
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  letter-spacing: -0.03em;
+}
+.eyebrow {
+  color: #526b89;
+  letter-spacing: 0.1em;
+}
+.merge-intro,
+.pane-hint,
+.master-heading p,
+.merge-actions p {
+  color: #607086;
+}
+.merge-progress {
+  border-color: #d7dee7;
+  border-radius: 8px;
+  box-shadow: none;
+}
+.merge-progress strong {
+  background: #e8eef6;
+  color: #1f4b7a;
+}
+.source-pane,
+.master-pane {
+  border-color: #d7dee7;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(23, 43, 77, 0.04);
+}
+.source-card,
+.plan-row {
+  border-color: #dfe5ec;
+  border-radius: 8px;
+  box-shadow: none;
+}
+.source-card:hover,
+.plan-row:hover {
+  border-color: #b7c6d8;
+  box-shadow: none;
+}
+.source-card > button:hover {
+  background: #f8fafc;
+}
+.master-paper {
+  border-color: #d7dee7;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.master-node:hover,
+.master-node-selectable:hover {
+  background: #eef3f8;
+}
+.master-node mark {
+  background: #e6edf5;
+  color: #1f4b7a;
+}
+.selection-status,
+.pane-count {
+  border-color: #cbd8e6;
+  background: #eef3f8;
+  color: #1f4b7a;
+}
+.merge-actions {
+  border-top-color: #d7dee7;
+}
+.merge-operation-progress {
+  flex: 1 1 100%;
+  min-width: 100%;
+  color: #1f4b7a;
+}
+.merge-operation-progress-heading {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+}
+.merge-operation-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dfe8f1;
+}
+.merge-operation-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2f9e62, #55c77d, #2f9e62);
+  background-size: 200% 100%;
+  transition: width 700ms ease;
+  animation: merge-progress-shimmer 1.4s linear infinite;
+}
+@keyframes merge-progress-shimmer {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+.merge-actions button,
+.merge-actions button:last-child {
+  background: #1f4b7a;
+  color: #fff;
+  border: 1px solid #1f4b7a;
+  border-radius: 7px;
+  box-shadow: none;
+}
+.merge-actions button:hover:not(:disabled) {
+  background: #163a61;
+  border-color: #163a61;
+}
+.merge-actions .secondary {
+  background: #fff;
+  color: #1f4b7a;
+  border-color: #aebed0;
+}
+.merge-actions .secondary:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #1f4b7a;
+}
+.remove-selection,
+.delete-document {
+  color: #8a3b3b;
+  border-color: #d9b8b8;
+  background: #fff;
+}
+.remove-selection:hover,
+.delete-document:hover {
+  background: #fff6f6;
+  border-color: #b96b6b;
 }
 .editor-back {
   appearance: none;

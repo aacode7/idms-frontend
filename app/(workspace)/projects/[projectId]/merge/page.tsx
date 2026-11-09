@@ -65,6 +65,7 @@ export default function MergePage() {
     [results, setResults] = useState<MergeResult[]>([]),
     [checking, setChecking] = useState(false),
     [merging, setMerging] = useState(false),
+    [mergeProgress, setMergeProgress] = useState(0),
     [mergedDocumentName, setMergedDocumentName] = useState(""),
     [initialMergeDescription, setInitialMergeDescription] = useState(""),
     [deletingMergeDocumentId, setDeletingMergeDocumentId] = useState<
@@ -304,17 +305,30 @@ export default function MergePage() {
   async function merge() {
     if (!master || !selected.length) return;
     setMerging(true);
+    setMergeProgress(5);
     try {
       const job = await createMergeJob(projectId, operations(), {
         generated_filename: mergedDocumentName.trim() || undefined,
         initial_description: initialMergeDescription.trim() || undefined,
       });
       setMessage("Merge queued. Waiting for the generated document…");
-      const timer = window.setInterval(async () => {
+      let polling = false;
+      const poll = async () => {
+        if (polling) return;
+        polling = true;
         try {
           const status = await getJob(job.id);
+          if (status.status === "queued")
+            setMergeProgress((value) => Math.max(value, 10));
+          if (status.stage === "staging")
+            setMergeProgress((value) => Math.max(value, 25));
+          if (status.stage === "merging")
+            setMergeProgress((value) => Math.max(value, 55));
+          if (status.stage === "persisting")
+            setMergeProgress((value) => Math.max(value, 80));
           if (status.status === "completed") {
             window.clearInterval(timer);
+            setMergeProgress(100);
             setResults(await getMergeResults(projectId));
             setMerging(false);
             setMessage(
@@ -323,19 +337,26 @@ export default function MergePage() {
           }
           if (status.status === "failed") {
             window.clearInterval(timer);
+            setMergeProgress(0);
             setMerging(false);
             setMessage("Merge failed. Review your selections and try again.");
           }
         } catch {
           window.clearInterval(timer);
+          setMergeProgress(0);
           setMerging(false);
           setMessage(
             "Merge status could not be retrieved. Refresh this page to check the result.",
           );
+        } finally {
+          polling = false;
         }
-      }, 2000);
+      };
+      const timer = window.setInterval(poll, 2000);
+      void poll();
     } catch (error) {
       setMerging(false);
+      setMergeProgress(0);
       setMessage(
         error instanceof Error ? error.message : "Merge could not be started.",
       );
@@ -631,7 +652,7 @@ export default function MergePage() {
                     className="editor-link"
                     href={`/documents/${result.generated_document_id}/versions/${result.generated_version_id}/edit?mode=edit&expected=${result.generated_version_id}&anchor=${encodeURIComponent(result.editor_anchor_ids[0] ?? "")}&anchors=${encodeURIComponent(result.editor_anchor_ids.join(","))}&initialMerge=1&returnTo=${encodeURIComponent(`/projects/${projectId}/merge`)}`}
                   >
-                    Open saved merge in ONLYOFFICE →
+                    Open saved merge in document editor →
                   </a>
                   <small>
                     {result.editor_anchor_ids.length} inserted section
@@ -802,6 +823,26 @@ export default function MergePage() {
             </label>
           </section>
           <footer className="merge-actions">
+            {merging && (
+              <div
+                className="merge-operation-progress"
+                aria-label={`Merge progress: ${mergeProgress}%`}
+              >
+                <div className="merge-operation-progress-heading">
+                  <span>Generating merged document</span>
+                  <strong>{mergeProgress}%</strong>
+                </div>
+                <div
+                  className="merge-operation-progress-track"
+                  role="progressbar"
+                  aria-valuemin={1}
+                  aria-valuemax={100}
+                  aria-valuenow={mergeProgress}
+                >
+                  <span style={{ width: `${mergeProgress}%` }} />
+                </div>
+              </div>
+            )}
             <p role="status" aria-live="polite">
               {message ||
                 "Select headings, map insertion points, then verify compatibility."}
