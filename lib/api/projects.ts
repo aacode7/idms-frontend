@@ -225,6 +225,11 @@ export const startAnalysis = (documentId: string) =>
   });
 export const getJob = (jobId: string) =>
   request<Job>(`/jobs/${jobId}`, { cache: "no-store" });
+export const exportVersionPdf = (versionId: string) =>
+  request<Job>(`/versions/${versionId}/exports`, {
+    method: "POST",
+    body: "{}",
+  });
 export const listVersions = (documentId: string) =>
   request<DocumentVersion[]>(`/documents/${documentId}/versions`, {
     cache: "no-store",

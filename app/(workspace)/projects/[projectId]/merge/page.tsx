@@ -562,6 +562,26 @@ export default function MergePage() {
                 </div>
               </div>
             ))}
+            {merging && (
+              <div
+                className="merge-operation-progress master-merge-progress"
+                aria-label={`Merge progress: ${mergeProgress}%`}
+              >
+                <div className="merge-operation-progress-heading">
+                  <span>Generating merged document</span>
+                  <strong>{mergeProgress}%</strong>
+                </div>
+                <div
+                  className="merge-operation-progress-track"
+                  role="progressbar"
+                  aria-valuemin={1}
+                  aria-valuemax={100}
+                  aria-valuenow={mergeProgress}
+                >
+                  <span style={{ width: `${mergeProgress}%` }} />
+                </div>
+              </div>
+            )}
           </section>
           <section className="insertion-plan">
             <div className="plan-heading">
@@ -823,26 +843,6 @@ export default function MergePage() {
             </label>
           </section>
           <footer className="merge-actions">
-            {merging && (
-              <div
-                className="merge-operation-progress"
-                aria-label={`Merge progress: ${mergeProgress}%`}
-              >
-                <div className="merge-operation-progress-heading">
-                  <span>Generating merged document</span>
-                  <strong>{mergeProgress}%</strong>
-                </div>
-                <div
-                  className="merge-operation-progress-track"
-                  role="progressbar"
-                  aria-valuemin={1}
-                  aria-valuemax={100}
-                  aria-valuenow={mergeProgress}
-                >
-                  <span style={{ width: `${mergeProgress}%` }} />
-                </div>
-              </div>
-            )}
             <p role="status" aria-live="polite">
               {message ||
                 "Select headings, map insertion points, then verify compatibility."}

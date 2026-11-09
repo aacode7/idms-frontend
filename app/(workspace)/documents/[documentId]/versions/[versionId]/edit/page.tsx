@@ -140,6 +140,10 @@ export default function EditorPage() {
     if (!sessionRef.current || mode !== "edit" || saving || savedVersionId)
       return;
     setSaving(true);
+    // Saving the initial generated merge finalizes v1. Unlike later editor
+    // saves, there is no reason to leave the user on this editor screen once
+    // that first version has been persisted.
+    if (isInitialMerge) returnAfterSaveRef.current = true;
     try {
       if (isInitialMerge) {
         const detailsResponse = await fetch(
@@ -203,27 +207,36 @@ export default function EditorPage() {
     window.location.assign(destination.toString());
   }
   async function discardAndLeave() {
+    if (leaving) return;
     setLeaving(true);
-    try {
-      if (sessionRef.current) {
-        await fetch(`${api}/editor-sessions/${sessionRef.current}/discard`, {
+    setShowLeaveDialog(false);
+
+    // The leave decision belongs to the user, not to the editor/network.  Send
+    // small keepalive requests so they survive this navigation, then exit at
+    // once. The discard endpoint makes late ONLYOFFICE callbacks harmless and
+    // the initial-merge delete removes an unsaved generated v1.
+    const cleanup: Promise<unknown>[] = [];
+    if (sessionRef.current) {
+      cleanup.push(
+        fetch(`${api}/editor-sessions/${sessionRef.current}/discard`, {
           method: "POST",
-        });
-      }
-      if (isInitialMerge) {
-        const response = await fetch(
-          `${api}/documents/${documentId}/versions/${versionId}/initial-merge`,
-          { method: "DELETE" },
-        );
-        if (!response.ok && response.status !== 404) throw new Error();
-      }
-      window.location.assign(returnTo);
-    } catch {
-      setLeaving(false);
-      setMessage(
-        "Could not discard the document. It remains open so you can try again.",
+          keepalive: true,
+        }),
       );
     }
+    if (isInitialMerge) {
+      cleanup.push(
+        fetch(
+          `${api}/documents/${documentId}/versions/${versionId}/initial-merge`,
+          {
+            method: "DELETE",
+            keepalive: true,
+          },
+        ),
+      );
+    }
+    void Promise.allSettled(cleanup);
+    window.location.assign(returnTo);
   }
   return (
     <main className="editor-shell">

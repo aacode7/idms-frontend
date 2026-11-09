@@ -125,9 +125,6 @@ export default function ProjectWorkspacePage() {
         completed.push(await uploadDocx(file, intent));
       }
       setDocuments((current) => [...current, ...completed]);
-      setActionError(
-        `${completed.length} document${completed.length === 1 ? "" : "s"} uploaded. DOCX analysis started automatically; PDFs can be converted below.`,
-      );
     } catch {
       setActionError(
         "Upload did not finish. Your original local file is unchanged; retry the failed file.",

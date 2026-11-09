@@ -44,6 +44,7 @@ export type Job = {
   status: string;
   stage: string;
   error_code: string | null;
+  download_url: string | null;
 };
 export type Diagnostic = {
   code: string;

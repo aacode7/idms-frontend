@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   compareVersions,
+  exportVersionPdf,
+  getJob,
   listVersions,
   restoreVersion,
 } from "../../../../../lib/api/projects";
@@ -22,6 +24,7 @@ export default function VersionsPage() {
   const [actor, setActor] = useState("Local user");
   const [comparison, setComparison] = useState<VersionComparison | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const latest = versions.find((version) => version.is_latest);
   const focused =
     versions.find((version) => version.id === focusedId) ??
@@ -87,6 +90,46 @@ export default function VersionsPage() {
       );
     } catch {
       setError("Versions could not be compared.");
+    }
+  }
+
+  async function downloadPdf() {
+    if (!focused || exportingPdf) return;
+    setExportingPdf(true);
+    setError("");
+    try {
+      const job = await exportVersionPdf(focused.id);
+      let timer = 0;
+      const poll = async () => {
+        try {
+          const status = await getJob(job.id);
+          if (status.status === "completed") {
+            window.clearInterval(timer);
+            setExportingPdf(false);
+            if (!status.download_url) {
+              setError(
+                "The PDF was created but its download link is unavailable.",
+              );
+              return;
+            }
+            window.location.assign(status.download_url);
+          }
+          if (status.status === "failed") {
+            window.clearInterval(timer);
+            setExportingPdf(false);
+            setError("PDF export failed. Please try again.");
+          }
+        } catch {
+          window.clearInterval(timer);
+          setExportingPdf(false);
+          setError("PDF export status could not be checked. Please try again.");
+        }
+      };
+      timer = window.setInterval(() => void poll(), 2000);
+      void poll();
+    } catch {
+      setExportingPdf(false);
+      setError("PDF export could not be started. Please try again.");
     }
   }
 
@@ -239,6 +282,14 @@ export default function VersionsPage() {
             <a className="button secondary" href={focused?.download_url}>
               Download file
             </a>
+            <button
+              type="button"
+              className="secondary"
+              disabled={!focused || exportingPdf}
+              onClick={downloadPdf}
+            >
+              {exportingPdf ? "Preparing PDF…" : "Download as PDF"}
+            </button>
             <button
               type="button"
               className="secondary"
