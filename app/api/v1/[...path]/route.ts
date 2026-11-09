@@ -25,6 +25,21 @@ function responseHeaders(upstream: Response) {
   return headers;
 }
 
+function responseBody(upstream: Response): Promise<ArrayBuffer | null> {
+  // The Fetch/Response contract forbids a body on these status codes. Passing
+  // an empty ArrayBuffer for a successful DELETE (204) makes Next.js throw
+  // while constructing the proxy response, which then looked like an API
+  // outage even though the backend had already completed the deletion.
+  if (
+    upstream.status === 204 ||
+    upstream.status === 205 ||
+    upstream.status === 304
+  ) {
+    return Promise.resolve(null);
+  }
+  return upstream.arrayBuffer();
+}
+
 async function proxy(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> },
@@ -47,7 +62,7 @@ async function proxy(
       redirect: "manual",
       signal: controller.signal,
     });
-    return new Response(await upstream.arrayBuffer(), {
+    return new Response(await responseBody(upstream), {
       status: upstream.status,
       headers: responseHeaders(upstream),
     });

@@ -44,8 +44,31 @@ export async function deleteProject(projectId: string): Promise<void> {
   // A repeated click can arrive after the first DELETE completed. In that
   // case a 404 means the intended end state has already been reached.
   if (!response.ok && response.status !== 404) {
-    throw new Error(`IDMS API returned ${response.status}`);
+    const payload = (await response.json().catch(() => null)) as {
+      detail?: string;
+    } | null;
+    throw new Error(payload?.detail ?? `IDMS API returned ${response.status}`);
   }
+}
+
+/** A DELETE response can be lost while the API is restarting. Verify the
+ * requested end state before showing the user a failure they cannot act on. */
+export async function confirmProjectDeleted(
+  projectId: string,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(`${apiUrl}/projects/${projectId}`, {
+        cache: "no-store",
+      });
+      if (response.status === 404) return true;
+      if (response.ok) return false;
+    } catch {
+      // The API may be transitioning between containers; retry briefly.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  }
+  return false;
 }
 export const listDocuments = (projectId: string) =>
   request<Document[]>(`/projects/${projectId}/documents`, {
@@ -149,10 +172,14 @@ export const createMergeJob = (
       normalise_tables: boolean;
     };
   }>,
+  metadata?: {
+    generated_filename?: string;
+    initial_description?: string;
+  },
 ) =>
   request<Job>(`/projects/${projectId}/merge-jobs`, {
     method: "POST",
-    body: JSON.stringify({ operations }),
+    body: JSON.stringify({ operations, ...metadata }),
   });
 export const previewMerge = (
   projectId: string,

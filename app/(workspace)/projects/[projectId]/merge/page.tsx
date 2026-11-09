@@ -65,6 +65,8 @@ export default function MergePage() {
     [results, setResults] = useState<MergeResult[]>([]),
     [checking, setChecking] = useState(false),
     [merging, setMerging] = useState(false),
+    [mergedDocumentName, setMergedDocumentName] = useState(""),
+    [initialMergeDescription, setInitialMergeDescription] = useState(""),
     [deletingMergeDocumentId, setDeletingMergeDocumentId] = useState<
       string | null
     >(null),
@@ -303,7 +305,10 @@ export default function MergePage() {
     if (!master || !selected.length) return;
     setMerging(true);
     try {
-      const job = await createMergeJob(projectId, operations());
+      const job = await createMergeJob(projectId, operations(), {
+        generated_filename: mergedDocumentName.trim() || undefined,
+        initial_description: initialMergeDescription.trim() || undefined,
+      });
       setMessage("Merge queued. Waiting for the generated document…");
       const timer = window.setInterval(async () => {
         try {
@@ -313,7 +318,7 @@ export default function MergePage() {
             setResults(await getMergeResults(projectId));
             setMerging(false);
             setMessage(
-              "Merge complete. Open the generated document in ONLYOFFICE.",
+              "Merge complete and saved as version 1. Open it to edit and save later versions.",
             );
           }
           if (status.status === "failed") {
@@ -616,16 +621,23 @@ export default function MergePage() {
           </section>
           {results.length > 0 && (
             <section className="merge-diagnostics">
-              <p className="eyebrow">MERGED SECTIONS</p>
+              <p className="eyebrow">MERGED DOCUMENT</p>
               {results.map((result) => (
-                <p key={result.source_node_key}>
+                <div
+                  className="merged-document-result"
+                  key={`${result.generated_document_id}:${result.generated_version_id}`}
+                >
                   <a
                     className="editor-link"
-                    href={`/documents/${result.generated_document_id}/versions/${result.generated_version_id}/edit?mode=edit&expected=${result.generated_version_id}&anchor=${encodeURIComponent(result.editor_anchor_id ?? "")}`}
+                    href={`/documents/${result.generated_document_id}/versions/${result.generated_version_id}/edit?mode=edit&expected=${result.generated_version_id}&anchor=${encodeURIComponent(result.editor_anchor_ids[0] ?? "")}&anchors=${encodeURIComponent(result.editor_anchor_ids.join(","))}&initialMerge=1&returnTo=${encodeURIComponent(`/projects/${projectId}/merge`)}`}
                   >
-                    Open inserted section in ONLYOFFICE →
-                  </a>{" "}
-                  <small>{result.source_node_key}</small>{" "}
+                    Open saved merge in ONLYOFFICE →
+                  </a>
+                  <small>
+                    {result.editor_anchor_ids.length} inserted section
+                    {result.editor_anchor_ids.length === 1 ? "" : "s"}; use the
+                    up/down controls in the editor to review each one.
+                  </small>
                   <button
                     type="button"
                     className="secondary delete-document"
@@ -638,7 +650,7 @@ export default function MergePage() {
                       ? "Deleting merged document…"
                       : "Delete merged document"}
                   </button>
-                </p>
+                </div>
               ))}
             </section>
           )}
@@ -703,15 +715,27 @@ export default function MergePage() {
                                             event.target.checked,
                                           )
                                         }
+                                        aria-label={
+                                          (selected[operationIndex]
+                                            ?.resolutionOptions[
+                                            finding.resolution_key as keyof Selection["resolutionOptions"]
+                                          ] ??
+                                          finding.resolution_default ??
+                                          true)
+                                            ? `Apply ${finding.code.replace("compatibility.", "").replaceAll("_", " ")}`
+                                            : `Do not apply ${finding.code.replace("compatibility.", "").replaceAll("_", " ")}; keep source formatting`
+                                        }
+                                        title={
+                                          (selected[operationIndex]
+                                            ?.resolutionOptions[
+                                            finding.resolution_key as keyof Selection["resolutionOptions"]
+                                          ] ??
+                                          finding.resolution_default ??
+                                          true)
+                                            ? "Apply adjustment"
+                                            : "Do not apply; keep source formatting"
+                                        }
                                       />
-                                      {(selected[operationIndex]
-                                        ?.resolutionOptions[
-                                        finding.resolution_key as keyof Selection["resolutionOptions"]
-                                      ] ??
-                                      finding.resolution_default ??
-                                      true)
-                                        ? "Apply"
-                                        : "Keep source"}
                                     </label>
                                   ) : finding.resolution_required ? (
                                     <small className="compatibility-required">
@@ -743,6 +767,40 @@ export default function MergePage() {
               )}
             </section>
           )}
+          <section
+            className="merge-metadata"
+            aria-label="Initial merged version details"
+          >
+            <div>
+              <p className="eyebrow">INITIAL MERGED VERSION</p>
+              <h3>Name and describe version 1</h3>
+              <p className="muted">
+                Creating a merge saves the first immutable version immediately.
+                Later editor saves create version 2, version 3, and so on.
+              </p>
+            </div>
+            <label>
+              Merged document name
+              <input
+                value={mergedDocumentName}
+                onChange={(event) => setMergedDocumentName(event.target.value)}
+                maxLength={255}
+                placeholder={"e.g. Final proposal.docx"}
+              />
+            </label>
+            <label>
+              Version 1 summary
+              <textarea
+                value={initialMergeDescription}
+                onChange={(event) =>
+                  setInitialMergeDescription(event.target.value)
+                }
+                maxLength={1000}
+                placeholder="e.g. Approved merge notes"
+                rows={2}
+              />
+            </label>
+          </section>
           <footer className="merge-actions">
             <p role="status" aria-live="polite">
               {message ||

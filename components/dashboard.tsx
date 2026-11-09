@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import {
+  confirmProjectDeleted,
   createProject,
   deleteProject,
   listProjects,
@@ -18,6 +19,7 @@ export function Dashboard() {
   const [menuProjectId, setMenuProjectId] = useState<string | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const deleteInFlight = useRef(false);
 
   useEffect(() => {
@@ -71,21 +73,41 @@ export function Dashboard() {
   async function confirmDelete() {
     if (!projectToDelete || deleteInFlight.current) return;
     deleteInFlight.current = true;
+    setDeleteError("");
     setDeleting(true);
-    try {
-      await deleteProject(projectToDelete.id);
+    const deletedProject = projectToDelete;
+    const removeProjectFromDashboard = () => {
       setProjects((current) =>
-        current.filter((project) => project.id !== projectToDelete.id),
+        current.filter((project) => project.id !== deletedProject.id),
       );
       setMessage(
-        `“${projectToDelete.name}” and all of its files were permanently deleted.`,
+        `“${deletedProject.name}” and all of its files were permanently deleted.`,
       );
       setState("ready");
       setProjectToDelete(null);
-    } catch {
-      setMessage(
-        "The project could not be deleted. Its records were kept so you can retry safely.",
-      );
+      // The optimistic removal makes the card disappear immediately. Refresh
+      // from the API in the background as a consistency check, without making
+      // the user reload the browser themselves.
+      void listProjects()
+        .then(setProjects)
+        .catch(() => {
+          // The successful DELETE is authoritative; keep the local removal.
+        });
+    };
+    try {
+      await deleteProject(projectToDelete.id);
+      removeProjectFromDashboard();
+    } catch (error) {
+      if (await confirmProjectDeleted(deletedProject.id)) {
+        removeProjectFromDashboard();
+        return;
+      }
+      const detail =
+        error instanceof Error && error.message ? ` ${error.message}` : "";
+      const retryMessage =
+        "The project could not be deleted. Its records were kept so you can retry safely.";
+      setMessage(`${retryMessage}${detail}`);
+      setDeleteError(`${retryMessage}${detail}`);
       setState("error");
     } finally {
       deleteInFlight.current = false;
@@ -251,6 +273,11 @@ export function Dashboard() {
                     role="menuitem"
                     onClick={() => {
                       setMenuProjectId(null);
+                      setDeleteError("");
+                      // Do not show a prior deletion failure behind a new
+                      // confirmation dialog for a different project.
+                      setMessage("");
+                      setState("ready");
                       setProjectToDelete(project);
                     }}
                   >
@@ -269,6 +296,7 @@ export function Dashboard() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-project-title"
+            aria-busy={deleting}
           >
             <p className="eyebrow">PERMANENT DELETION</p>
             <h2 id="delete-project-title">Delete “{projectToDelete.name}”?</h2>
@@ -279,12 +307,20 @@ export function Dashboard() {
               every version, analysis, job record, and all associated DOCX/PDF
               files from object storage. This cannot be undone.
             </p>
+            {deleteError && (
+              <p className="delete-error" role="alert">
+                {deleteError}
+              </p>
+            )}
             <div>
               <button
                 className="secondary"
                 type="button"
                 disabled={deleting}
-                onClick={() => setProjectToDelete(null)}
+                onClick={() => {
+                  setDeleteError("");
+                  setProjectToDelete(null);
+                }}
               >
                 Cancel
               </button>
@@ -294,7 +330,10 @@ export function Dashboard() {
                 disabled={deleting}
                 onClick={confirmDelete}
               >
-                {deleting ? "Deleting…" : "Delete permanently"}
+                {deleting && (
+                  <span className="button-spinner" aria-hidden="true" />
+                )}
+                {deleting ? "Deleting permanently…" : "Delete permanently"}
               </button>
             </div>
           </section>

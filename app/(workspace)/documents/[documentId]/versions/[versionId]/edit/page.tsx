@@ -20,13 +20,24 @@ export default function EditorPage() {
   const query = useSearchParams();
   const holder = useRef<HTMLDivElement>(null);
   const sessionRef = useRef("");
+  const returnAfterSaveRef = useRef(false);
   const [message, setMessage] = useState("Preparing document editor…");
   const [changeSummary, setChangeSummary] = useState(
     query.get("description") || "",
   );
+  const [mergedDocumentName, setMergedDocumentName] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedVersionId, setSavedVersionId] = useState("");
+  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const mergeAnchors = (query.get("anchors") || query.get("anchor") || "")
+    .split(",")
+    .filter(Boolean);
+  const activeAnchor = query.get("anchor") || mergeAnchors[0] || "";
+  const activeAnchorIndex = Math.max(0, mergeAnchors.indexOf(activeAnchor));
   const mode = query.get("mode") === "view" ? "view" : "edit";
+  const isInitialMerge = query.get("initialMerge") === "1";
+  const returnTo = query.get("returnTo") || `/documents/${documentId}/versions`;
 
   useEffect(() => {
     let sessionId = "";
@@ -47,6 +58,7 @@ export default function EditorPage() {
       );
       if (!response.ok) throw new Error(await response.text());
       const config = await response.json();
+      setMergedDocumentName(config.document?.title || "");
       sessionId = config.session_id;
       sessionRef.current = sessionId;
       const script = document.createElement("script");
@@ -89,6 +101,7 @@ export default function EditorPage() {
               "Saved as a new immutable version. Your edit note is now shown in version history.",
             );
             clearInterval(timer);
+            if (returnAfterSaveRef.current) window.location.assign(returnTo);
           }
           if (state.status === "conflict") {
             setSaving(false);
@@ -108,14 +121,28 @@ export default function EditorPage() {
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [mode, query, versionId]);
+  }, [mode, query, returnTo, versionId]);
 
-  async function saveNewVersion() {
+  async function saveDocument() {
     if (!sessionRef.current || mode !== "edit" || saving || savedVersionId)
       return;
     setSaving(true);
-    setMessage("Requesting ONLYOFFICE to save a new immutable version…");
     try {
+      if (isInitialMerge) {
+        const detailsResponse = await fetch(
+          `${api}/documents/${documentId}/versions/${versionId}/initial-merge-details`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filename: mergedDocumentName || undefined,
+              description: changeSummary || undefined,
+            }),
+          },
+        );
+        if (!detailsResponse.ok) throw new Error(await detailsResponse.text());
+      }
+      setMessage("Saving document…");
       const response = await fetch(
         `${api}/editor-sessions/${sessionRef.current}/save`,
         {
@@ -125,6 +152,20 @@ export default function EditorPage() {
         },
       );
       if (!response.ok) throw new Error(await response.text());
+      const outcome = (await response.json()) as { status?: string };
+      if (outcome.status === "unchanged") {
+        setSaving(false);
+        if (returnAfterSaveRef.current) {
+          window.location.assign(returnTo);
+          return;
+        }
+        setMessage(
+          isInitialMerge
+            ? "Merge details saved. The merged version is already current."
+            : "No additional editor edits need saving. Your current version remains unchanged.",
+        );
+        return;
+      }
       setMessage(
         "Saving in ONLYOFFICE… IDMS will add the next version shortly.",
       );
@@ -135,21 +176,103 @@ export default function EditorPage() {
       );
     }
   }
+  function leaveAfterSaving() {
+    setShowLeaveDialog(false);
+    returnAfterSaveRef.current = true;
+    void saveDocument();
+  }
+  function goToMergedSection(offset: number) {
+    const nextAnchor = mergeAnchors[activeAnchorIndex + offset];
+    if (!nextAnchor) return;
+    const destination = new URL(window.location.href);
+    destination.searchParams.set("anchor", nextAnchor);
+    destination.searchParams.set("anchors", mergeAnchors.join(","));
+    window.location.assign(destination.toString());
+  }
+  async function discardAndLeave() {
+    setLeaving(true);
+    try {
+      if (sessionRef.current) {
+        await fetch(`${api}/editor-sessions/${sessionRef.current}/discard`, {
+          method: "POST",
+        });
+      }
+      if (isInitialMerge) {
+        const response = await fetch(
+          `${api}/documents/${documentId}/versions/${versionId}/initial-merge`,
+          { method: "DELETE" },
+        );
+        if (!response.ok && response.status !== 404) throw new Error();
+      }
+      window.location.assign(returnTo);
+    } catch {
+      setLeaving(false);
+      setMessage(
+        "Could not discard the document. It remains open so you can try again.",
+      );
+    }
+  }
   return (
     <main className="editor-shell">
       <header className="editor-page-header">
         <div>
-          <a className="back" href={`/documents/${documentId}/versions`}>
+          <button
+            className="back editor-back"
+            type="button"
+            onClick={() => setShowLeaveDialog(true)}
+          >
             <span aria-hidden="true">←</span> Version history
-          </a>
+          </button>
           <p className="eyebrow">
             {mode === "view" ? "READ ONLY" : "EDITING WORKSPACE"}
           </p>
         </div>
         <div className="editor-controls">
           <p className="muted editor-status">{message}</p>
+          {isInitialMerge && !savedVersionId && (
+            <>
+              <label className="editor-summary">
+                Merged document name
+                <input
+                  value={mergedDocumentName}
+                  onChange={(event) =>
+                    setMergedDocumentName(event.target.value)
+                  }
+                  maxLength={255}
+                  placeholder="Merged document.docx"
+                />
+              </label>
+            </>
+          )}
           {mode === "edit" && !savedVersionId && (
             <>
+              {mergeAnchors.length > 1 && (
+                <div className="editor-change-navigation" aria-label="Inserted section navigation">
+                  <span>
+                    Inserted section {activeAnchorIndex + 1} of {mergeAnchors.length}
+                  </span>
+                  <button
+                    type="button"
+                    className="editor-change-arrow"
+                    disabled={activeAnchorIndex === 0}
+                    onClick={() => goToMergedSection(-1)}
+                    aria-label="Previous inserted section"
+                    title="Previous inserted section"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="editor-change-arrow"
+                    disabled={activeAnchorIndex === mergeAnchors.length - 1}
+                    onClick={() => goToMergedSection(1)}
+                    aria-label="Next inserted section"
+                    title="Next inserted section"
+                  >
+                    ↓
+                  </button>
+                </div>
+              )}
               <label className="editor-summary">
                 Change summary
                 <input
@@ -163,9 +286,9 @@ export default function EditorPage() {
                 type="button"
                 className="editor-save"
                 disabled={saving}
-                onClick={saveNewVersion}
+                onClick={() => void saveDocument()}
               >
-                {saving ? "Saving new version…" : "Save new version"}
+                {saving ? "Saving…" : "Save"}
               </button>
             </>
           )}
@@ -180,6 +303,48 @@ export default function EditorPage() {
         </div>
       </header>
       <div ref={holder} id="onlyoffice-editor" className="editor-frame" />
+      {showLeaveDialog && (
+        <div className="leave-dialog-backdrop" role="presentation">
+          <section
+            className="leave-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="leave-editor-title"
+          >
+            <h2 id="leave-editor-title">Save changes before leaving?</h2>
+            <p>
+              {isInitialMerge
+                ? "Don’t save will permanently delete this newly generated version 1 document."
+                : "Don’t save discards only the edits made in this editor session. Existing versions stay unchanged."}
+            </p>
+            <div className="leave-dialog-actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={leaving}
+                onClick={() => setShowLeaveDialog(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="delete-document"
+                disabled={leaving}
+                onClick={discardAndLeave}
+              >
+                {leaving ? "Discarding…" : "Don’t save"}
+              </button>
+              <button
+                type="button"
+                disabled={saving || leaving}
+                onClick={leaveAfterSaving}
+              >
+                {saving ? "Saving…" : "Save and leave"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

@@ -5,13 +5,11 @@ import { useParams } from "next/navigation";
 import {
   createUploadIntent,
   deleteDocument,
-  getJob,
   getProject,
   listDocuments,
   listVersions,
   removeMaster,
   selectMaster,
-  startAnalysis,
   uploadDocx,
 } from "../../../../lib/api/projects";
 import type {
@@ -31,7 +29,6 @@ export default function ProjectWorkspacePage() {
   >({});
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(
     null,
@@ -39,7 +36,6 @@ export default function ProjectWorkspacePage() {
   const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(
     null,
   );
-  const [analysisJobs, setAnalysisJobs] = useState<Record<string, string>>({});
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -61,51 +57,29 @@ export default function ProjectWorkspacePage() {
   }, [projectId]);
 
   useEffect(() => {
-    const entries = Object.entries(analysisJobs);
-    if (!entries.length) return;
+    const hasActiveAnalysis = documents.some(
+      (document) =>
+        document.analysis_status === "queued" ||
+        document.analysis_status === "running",
+    );
+    if (!hasActiveAnalysis) return;
     const timer = window.setInterval(async () => {
-      const results = await Promise.all(
-        entries.map(async ([documentId, jobId]) => ({
-          documentId,
-          job: await getJob(jobId),
-        })),
-      );
-      const complete = results.filter(
-        ({ job }) => job.status === "completed" || job.status === "failed",
-      );
-      if (!complete.length) {
-        setDocuments((current) =>
-          current.map((document) => {
-            const matching = results.find(
-              (result) => result.documentId === document.id,
-            );
-            return matching
-              ? {
-                  ...document,
-                  analysis_status:
-                    matching.job.status === "running" ? "running" : "queued",
-                }
-              : document;
-          }),
-        );
-        return;
+      try {
+        const refreshed = await listDocuments(projectId);
+        setDocuments(refreshed);
+        if (
+          refreshed.some((document) => document.analysis_status === "failed")
+        ) {
+          setActionError(
+            "Analysis could not be completed for one or more documents. Check the worker, then upload the affected file again.",
+          );
+        }
+      } catch {
+        // Keep the last known progress visible and retry on the next interval.
       }
-      const refreshed = await listDocuments(projectId);
-      setDocuments(refreshed);
-      setAnalysisJobs((current) => {
-        const next = { ...current };
-        complete.forEach(({ documentId }) => delete next[documentId]);
-        return next;
-      });
-      const failed = complete.find(({ job }) => job.status === "failed");
-      setActionError(
-        failed
-          ? "Analysis failed. Please retry that document."
-          : "Analysis complete. You can now select sections in the merge workspace.",
-      );
     }, 2000);
     return () => window.clearInterval(timer);
-  }, [analysisJobs, projectId]);
+  }, [documents, projectId]);
 
   async function sha256(file: File) {
     const digest = await crypto.subtle.digest(
@@ -146,7 +120,7 @@ export default function ProjectWorkspacePage() {
       }
       setDocuments((current) => [...current, ...completed]);
       setActionError(
-        `${completed.length} document${completed.length === 1 ? "" : "s"} uploaded. Choose a master when ready.`,
+        `${completed.length} document${completed.length === 1 ? "" : "s"} uploaded. Analysis started automatically.`,
       );
     } catch {
       setActionError(
@@ -196,78 +170,6 @@ export default function ProjectWorkspacePage() {
       setDeletingDocumentId(null);
     }
   }
-  async function analyze(documentId: string) {
-    try {
-      const job = await startAnalysis(documentId);
-      setAnalysisJobs((current) => ({ ...current, [documentId]: job.id }));
-      setDocuments((current) =>
-        current.map((document) =>
-          document.id === documentId
-            ? { ...document, analysis_status: "queued" }
-            : document,
-        ),
-      );
-      setActionError(
-        "Analysis queued. This page will update automatically when it finishes.",
-      );
-    } catch {
-      setActionError(
-        "Analysis could not be queued. Ensure Redis/Celery is running.",
-      );
-    }
-  }
-
-  async function submitDocuments() {
-    const pending = documents.filter(
-      (document) =>
-        document.role !== "generated" &&
-        document.status === "uploaded" &&
-        !["queued", "running", "completed"].includes(document.analysis_status),
-    );
-    if (!master) {
-      setActionError(
-        "Select a master document before submitting for analysis.",
-      );
-      return;
-    }
-    if (!pending.length) {
-      setActionError("All documents have already been analyzed.");
-      return;
-    }
-    setSubmitting(true);
-    setActionError("");
-    try {
-      const jobs = await Promise.all(
-        pending.map(
-          async (document) =>
-            [document.id, await startAnalysis(document.id)] as const,
-        ),
-      );
-      setAnalysisJobs((current) => ({
-        ...current,
-        ...Object.fromEntries(
-          jobs.map(([documentId, job]) => [documentId, job.id]),
-        ),
-      }));
-      setDocuments((current) =>
-        current.map((document) =>
-          pending.some((item) => item.id === document.id)
-            ? { ...document, analysis_status: "queued" }
-            : document,
-        ),
-      );
-      setActionError(
-        "Analysis submitted for all documents. You can continue when it finishes.",
-      );
-    } catch {
-      setActionError(
-        "Analysis could not be submitted. Ensure Redis/Celery is running.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   if (error)
     return (
       <main className="shell">
@@ -290,7 +192,7 @@ export default function ProjectWorkspacePage() {
     (document) => document.role === "generated",
   );
   const uploadInProgress = uploading;
-  const workflowBusy = uploadInProgress || submitting;
+  const workflowBusy = uploadInProgress;
   const analyzingDocuments = documents.filter(
     (document) =>
       document.analysis_status === "queued" ||
@@ -305,10 +207,10 @@ export default function ProjectWorkspacePage() {
       (document) => document.analysis_status === "completed",
     );
   const analysisLabel = (document: Document) => {
-    if (document.analysis_status === "completed") return "Analysis complete ✓";
+    if (document.analysis_status === "completed") return "Analysis complete";
     if (document.analysis_status === "running") return "Analyzing…";
     if (document.analysis_status === "queued") return "Analysis queued…";
-    if (document.analysis_status === "failed") return "Analysis failed — retry";
+    if (document.analysis_status === "failed") return "Analysis failed";
     return document.role === "master"
       ? "Master document"
       : document.status === "upload_pending"
@@ -356,29 +258,9 @@ export default function ProjectWorkspacePage() {
           >
             {uploading ? "Uploading…" : "Upload DOCX files"}
           </button>
-          <div className="workflow-actions">
-            <button
-              type="button"
-              onClick={submitDocuments}
-              disabled={workflowBusy || !master}
-            >
-              {submitting ? "Submitting…" : "Submit & Analyze"}
-            </button>
-            <a
-              className={`secondary ${!master || !allDocumentsAnalyzed ? "disabled-link" : ""}`}
-              href={
-                master && allDocumentsAnalyzed
-                  ? `/projects/${projectId}/merge`
-                  : undefined
-              }
-              aria-disabled={!master || !allDocumentsAnalyzed}
-              onClick={(event) => {
-                if (!master || !allDocumentsAnalyzed) event.preventDefault();
-              }}
-            >
-              Next →
-            </a>
-          </div>
+          <p className="upload-assurance">
+            Every completed upload is analyzed automatically.
+          </p>
           {analyzingDocuments.length > 0 && (
             <p className="analysis-indicator" role="status" aria-live="polite">
               <span className="analysis-spinner" aria-hidden="true" />
@@ -407,19 +289,6 @@ export default function ProjectWorkspacePage() {
                   </span>
                   {document.status === "uploaded" && (
                     <span className="document-actions">
-                      {document.analysis_status !== "queued" &&
-                        document.analysis_status !== "running" &&
-                        document.analysis_status !== "completed" && (
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() => analyze(document.id)}
-                          >
-                            {document.analysis_status === "failed"
-                              ? "Retry analysis"
-                              : "Analyze"}
-                          </button>
-                        )}
                       <button
                         type="button"
                         className="secondary"
@@ -456,7 +325,7 @@ export default function ProjectWorkspacePage() {
             {master
               ? allDocumentsAnalyzed
                 ? "All documents are analyzed and ready to compose."
-                : `${master.filename} is the current master. Analyze all documents before composing a merge.`
+                : `${master.filename} is the current master. Document analysis is still in progress.`
               : "Upload your documents first, then select any one as the master."}
           </p>
           {master && (
@@ -465,19 +334,6 @@ export default function ProjectWorkspacePage() {
               <small>{analysisLabel(master)}</small>
               {master.status === "uploaded" && (
                 <span className="document-actions">
-                  {master.analysis_status !== "queued" &&
-                    master.analysis_status !== "running" &&
-                    master.analysis_status !== "completed" && (
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => analyze(master.id)}
-                      >
-                        {master.analysis_status === "failed"
-                          ? "Retry analysis"
-                          : "Analyze"}
-                      </button>
-                    )}
                   <button
                     type="button"
                     className="secondary"
@@ -498,7 +354,16 @@ export default function ProjectWorkspacePage() {
             </div>
           )}
           {master && allDocumentsAnalyzed ? (
-            <a href={`/projects/${projectId}/merge`}>Open merge workspace →</a>
+            <a
+              className="merge-workspace-cta"
+              href={`/projects/${projectId}/merge`}
+            >
+              <span>
+                <small>READY TO COMPOSE</small>
+                Open merge workspace
+              </span>
+              <span aria-hidden="true">→</span>
+            </a>
           ) : master ? (
             <p className="muted">Waiting for document analysis to finish.</p>
           ) : null}

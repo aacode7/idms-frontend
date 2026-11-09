@@ -60,10 +60,10 @@ export type Diagnostic = {
 };
 export type MergePreview = { warnings: string[]; diagnostics: Diagnostic[] };
 export type MergeResult = {
-  source_node_key: string;
   generated_version_id: string;
   generated_document_id: string;
-  editor_anchor_id: string | null;
+  source_node_keys: string[];
+  editor_anchor_ids: string[];
 };
 
 export type DocumentVersion = {
