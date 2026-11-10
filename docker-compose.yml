@@ -1,15 +1,19 @@
 name: idms-frontend
 
 services:
-  frontend:
+  web:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: idms-frontend/Dockerfile.web
+      network: host
       args:
         NEXT_PUBLIC_IDMS_API_URL: ${NEXT_PUBLIC_IDMS_API_URL:-/api/v1}
-        IDMS_API_INTERNAL_URL: ${IDMS_API_INTERNAL_URL:-http://api:8000}
     env_file:
+      - ../idms-backend/.env
       - .env.local
+    environment:
+      # The Next.js route handler reaches Uvicorn in this same container.
+      IDMS_API_INTERNAL_URL: http://127.0.0.1:8000
     ports:
       - "127.0.0.1:3000:3000"
     restart: unless-stopped

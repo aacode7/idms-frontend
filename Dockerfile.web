@@ -1,0 +1,68 @@
+# syntax=docker/dockerfile:1.7
+# A single public IDMS web container: Next.js serves the UI and proxies API
+# routes to Uvicorn over loopback. Celery/Redis/ONLYOFFICE remain independent
+# services because they have separate lifecycle and scaling requirements.
+
+FROM node:20-bookworm-slim AS frontend-builder
+
+WORKDIR /srv/idms-frontend
+COPY idms-frontend/package*.json ./
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm ci --include=dev --no-audit --no-fund
+COPY idms-frontend/ ./
+ARG NEXT_PUBLIC_IDMS_API_URL=/api/v1
+ENV NEXT_PUBLIC_IDMS_API_URL=$NEXT_PUBLIC_IDMS_API_URL
+RUN --mount=type=cache,target=/srv/idms-frontend/.next/cache \
+    npm run build \
+    && npm prune --omit=dev
+
+FROM python:3.12-slim-bookworm AS api-builder
+
+WORKDIR /srv/idms-backend
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+COPY idms-document-engine/pyproject.toml /srv/idms-document-engine/pyproject.toml
+COPY idms-backend/pyproject.toml ./pyproject.toml
+RUN --network=host --mount=type=cache,target=/root/.cache/pip \
+    python -c "import pathlib,tomllib,sys; [sys.stdout.buffer.write(dep.encode()+b'\\0') for path in map(pathlib.Path, ('/srv/idms-document-engine/pyproject.toml', '/srv/idms-backend/pyproject.toml')) for dep in tomllib.loads(path.read_text())['project']['dependencies']]" \
+      | xargs -0 pip install
+COPY idms-document-engine/src /srv/idms-document-engine/src
+COPY idms-backend/app ./app
+RUN --network=host --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-deps /srv/idms-document-engine /srv/idms-backend
+
+FROM python:3.12-slim-bookworm AS runtime
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
+# Keep the same Node 20 runtime that produced the Next.js build.  Installing
+# Debian's npm package pulls several hundred development packages and can also
+# yield a different Node version from the builder.
+COPY --from=frontend-builder /usr/local/bin/node /usr/local/bin/node
+COPY --from=frontend-builder /usr/local/bin/npm /usr/local/bin/npm
+COPY --from=frontend-builder /usr/local/bin/npx /usr/local/bin/npx
+COPY --from=frontend-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
+
+ENV NODE_ENV=production \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /srv/idms-backend
+COPY --from=api-builder /opt/venv /opt/venv
+COPY idms-backend/alembic.ini ./
+COPY idms-backend/migrations ./migrations
+COPY idms-backend/docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
+
+WORKDIR /srv/idms-frontend
+COPY --from=frontend-builder /srv/idms-frontend/package.json ./
+COPY --from=frontend-builder /srv/idms-frontend/node_modules ./node_modules
+COPY --from=frontend-builder /srv/idms-frontend/.next ./.next
+COPY idms-frontend/supervisord.conf /etc/supervisor/conf.d/idms-web.conf
+
+EXPOSE 3000
+ENTRYPOINT ["/srv/idms-backend/docker-entrypoint.sh"]
+CMD ["supervisord", "-n", "-c", "/etc/supervisor/conf.d/idms-web.conf"]

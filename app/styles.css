@@ -1273,6 +1273,9 @@ small {
   font-size: 0.82rem;
   color: #526d87;
 }
+.start-another-merge {
+  margin-top: 10px;
+}
 .merge-actions {
   display: flex;
   justify-content: flex-end;

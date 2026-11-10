@@ -65,6 +65,7 @@ export default function MergePage() {
     [results, setResults] = useState<MergeResult[]>([]),
     [checking, setChecking] = useState(false),
     [merging, setMerging] = useState(false),
+    [mergeFinished, setMergeFinished] = useState(false),
     [mergeProgress, setMergeProgress] = useState(0),
     [mergedDocumentName, setMergedDocumentName] = useState(""),
     [initialMergeDescription, setInitialMergeDescription] = useState(""),
@@ -331,6 +332,15 @@ export default function MergePage() {
             setMergeProgress(100);
             setResults(await getMergeResults(projectId));
             setMerging(false);
+            // The completed merge is immutable. Keeping its former plan and
+            // compatibility choices on screen suggests they still apply.
+            setSelected([]);
+            setPreview(null);
+            setPlacementCandidate(null);
+            setDragged(null);
+            setDropTarget(null);
+            setOpen(null);
+            setMergeFinished(true);
             setMessage(
               "Merge complete and saved as version 1. Open it to edit and save later versions.",
             );
@@ -390,6 +400,11 @@ export default function MergePage() {
       deletingMergeRef.current = null;
       setDeletingMergeDocumentId(null);
     }
+  }
+  function startAnotherMerge() {
+    setMergeFinished(false);
+    setMergeProgress(0);
+    setMessage("Select headings to create another merged document.");
   }
   return (
     <main className="merge-shell">
@@ -583,83 +598,85 @@ export default function MergePage() {
               </div>
             )}
           </section>
-          <section className="insertion-plan">
-            <div className="plan-heading">
-              <div>
-                <p className="eyebrow">INSERTION PLAN</p>
-                <h2>
-                  {selected.length
-                    ? `${selected.length} selected section${selected.length === 1 ? "" : "s"}`
-                    : "No sections selected"}
-                </h2>
-              </div>
-              {selected.length > 0 && (
-                <span className="selection-status">Ready to review</span>
-              )}
-            </div>
-            {!selected.length && (
-              <p className="merge-empty">
-                Select a source heading to build an ordered insertion plan.
-              </p>
-            )}
-            {selected.map((s, i) => (
-              <div className="plan-row" key={s.document.id + s.node.node_key}>
-                <span>{i + 1}</span>
+          {!mergeFinished && (
+            <section className="insertion-plan">
+              <div className="plan-heading">
                 <div>
-                  <strong>{s.node.title}</strong>
-                  <small>{s.document.filename}</small>
+                  <p className="eyebrow">INSERTION PLAN</p>
+                  <h2>
+                    {selected.length
+                      ? `${selected.length} selected section${selected.length === 1 ? "" : "s"}`
+                      : "No sections selected"}
+                  </h2>
                 </div>
-                <select
-                  value={s.position}
-                  onChange={(e) =>
-                    setSelected((v) =>
-                      v.map((x, n) =>
-                        n === i
-                          ? {
-                              ...x,
-                              position: e.target.value as "before" | "after",
-                            }
-                          : x,
-                      ),
-                    )
-                  }
-                >
-                  <option value="after">After</option>
-                  <option value="before">Before</option>
-                </select>
-                <select
-                  value={s.destination ?? ""}
-                  onChange={(e) =>
-                    setSelected((v) =>
-                      v.map((x, n) =>
-                        n === i
-                          ? { ...x, destination: e.target.value || null }
-                          : x,
-                      ),
-                    )
-                  }
-                >
-                  <option value="">End of document</option>
-                  {masterOutline.map((n) => (
-                    <option key={n.node_key} value={n.node_key}>
-                      {n.title}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="remove-selection"
-                  onClick={() =>
-                    setSelected((items) =>
-                      items.filter((_, index) => index !== i),
-                    )
-                  }
-                >
-                  Remove
-                </button>
+                {selected.length > 0 && (
+                  <span className="selection-status">Ready to review</span>
+                )}
               </div>
-            ))}
-          </section>
+              {!selected.length && (
+                <p className="merge-empty">
+                  Select a source heading to build an ordered insertion plan.
+                </p>
+              )}
+              {selected.map((s, i) => (
+                <div className="plan-row" key={s.document.id + s.node.node_key}>
+                  <span>{i + 1}</span>
+                  <div>
+                    <strong>{s.node.title}</strong>
+                    <small>{s.document.filename}</small>
+                  </div>
+                  <select
+                    value={s.position}
+                    onChange={(e) =>
+                      setSelected((v) =>
+                        v.map((x, n) =>
+                          n === i
+                            ? {
+                                ...x,
+                                position: e.target.value as "before" | "after",
+                              }
+                            : x,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="after">After</option>
+                    <option value="before">Before</option>
+                  </select>
+                  <select
+                    value={s.destination ?? ""}
+                    onChange={(e) =>
+                      setSelected((v) =>
+                        v.map((x, n) =>
+                          n === i
+                            ? { ...x, destination: e.target.value || null }
+                            : x,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="">End of document</option>
+                    {masterOutline.map((n) => (
+                      <option key={n.node_key} value={n.node_key}>
+                        {n.title}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="remove-selection"
+                    onClick={() =>
+                      setSelected((items) =>
+                        items.filter((_, index) => index !== i),
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </section>
+          )}
           {results.length > 0 && (
             <section className="merge-diagnostics">
               <p className="eyebrow">MERGED DOCUMENT</p>
@@ -693,9 +710,18 @@ export default function MergePage() {
                   </button>
                 </div>
               ))}
+              {mergeFinished && (
+                <button
+                  type="button"
+                  className="secondary start-another-merge"
+                  onClick={startAnotherMerge}
+                >
+                  Create another merge
+                </button>
+              )}
             </section>
           )}
-          {preview && (
+          {!mergeFinished && preview && (
             <section className="merge-diagnostics">
               <p className="eyebrow">COMPATIBILITY RESULTS</p>
               <p className="compatibility-guidance">
@@ -808,63 +834,70 @@ export default function MergePage() {
               )}
             </section>
           )}
-          <section
-            className="merge-metadata"
-            aria-label="Initial merged version details"
-          >
-            <div>
-              <p className="eyebrow">INITIAL MERGED VERSION</p>
-              <h3>Name and describe version 1</h3>
-              <p className="muted">
-                Creating a merge saves the first immutable version immediately.
-                Later editor saves create version 2, version 3, and so on.
+          {!mergeFinished && (
+            <section
+              className="merge-metadata"
+              aria-label="Initial merged version details"
+            >
+              <div>
+                <p className="eyebrow">INITIAL MERGED VERSION</p>
+                <h3>Name and describe version 1</h3>
+                <p className="muted">
+                  Creating a merge saves the first immutable version
+                  immediately. Later editor saves create version 2, version 3,
+                  and so on.
+                </p>
+              </div>
+              <label>
+                Merged document name
+                <input
+                  value={mergedDocumentName}
+                  onChange={(event) =>
+                    setMergedDocumentName(event.target.value)
+                  }
+                  maxLength={255}
+                  placeholder={"e.g. Final proposal.docx"}
+                />
+              </label>
+              <label>
+                Version 1 summary
+                <textarea
+                  value={initialMergeDescription}
+                  onChange={(event) =>
+                    setInitialMergeDescription(event.target.value)
+                  }
+                  maxLength={1000}
+                  placeholder="e.g. Approved merge notes"
+                  rows={2}
+                />
+              </label>
+            </section>
+          )}
+          {!mergeFinished && (
+            <footer className="merge-actions">
+              <p role="status" aria-live="polite">
+                {message ||
+                  "Select headings, map insertion points, then verify compatibility."}
               </p>
-            </div>
-            <label>
-              Merged document name
-              <input
-                value={mergedDocumentName}
-                onChange={(event) => setMergedDocumentName(event.target.value)}
-                maxLength={255}
-                placeholder={"e.g. Final proposal.docx"}
-              />
-            </label>
-            <label>
-              Version 1 summary
-              <textarea
-                value={initialMergeDescription}
-                onChange={(event) =>
-                  setInitialMergeDescription(event.target.value)
-                }
-                maxLength={1000}
-                placeholder="e.g. Approved merge notes"
-                rows={2}
-              />
-            </label>
-          </section>
-          <footer className="merge-actions">
-            <p role="status" aria-live="polite">
-              {message ||
-                "Select headings, map insertion points, then verify compatibility."}
-            </p>
-            <button
-              type="button"
-              className="secondary"
-              disabled={!selected.length || checking || merging}
-              onClick={check}
-            >
-              {checking ? "Checking…" : "Check compatibility"}
-            </button>
-            <button
-              type="button"
-              disabled={!master || !selected.length || checking || merging}
-              onClick={merge}
-            >
-              {merging
-                ? "Creating merge…"
-                : `Create merge (${selected.length})`}
-            </button>
-          </footer>
+              <button
+                type="button"
+                className="secondary"
+                disabled={!selected.length || checking || merging}
+                onClick={check}
+              >
+                {checking ? "Checking…" : "Check compatibility"}
+              </button>
+              <button
+                type="button"
+                disabled={!master || !selected.length || checking || merging}
+                onClick={merge}
+              >
+                {merging
+                  ? "Creating merge…"
+                  : `Create merge (${selected.length})`}
+              </button>
+            </footer>
+          )}
         </section>
       </div>
     </main>

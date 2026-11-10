@@ -37,7 +37,9 @@ export default function EditorPage() {
   const activeAnchorIndex = Math.max(0, mergeAnchors.indexOf(activeAnchor));
   const mode = query.get("mode") === "view" ? "view" : "edit";
   const isInitialMerge = query.get("initialMerge") === "1";
-  const returnTo = query.get("returnTo") || `/documents/${documentId}/versions`;
+  const mergeWorkspaceReturnTo = query.get("returnTo");
+  const returnTo =
+    mergeWorkspaceReturnTo || `/documents/${documentId}/versions`;
 
   useEffect(() => {
     let sessionId = "";
@@ -140,10 +142,10 @@ export default function EditorPage() {
     if (!sessionRef.current || mode !== "edit" || saving || savedVersionId)
       return;
     setSaving(true);
-    // Saving the initial generated merge finalizes v1. Unlike later editor
-    // saves, there is no reason to leave the user on this editor screen once
-    // that first version has been persisted.
-    if (isInitialMerge) returnAfterSaveRef.current = true;
+    // A merge-workspace editor is a review step. Once its save has completed
+    // (or the document is already current), return to that workspace instead
+    // of leaving the user stranded in ONLYOFFICE.
+    if (mergeWorkspaceReturnTo) returnAfterSaveRef.current = true;
     try {
       if (isInitialMerge) {
         const detailsResponse = await fetch(
@@ -159,7 +161,11 @@ export default function EditorPage() {
         );
         if (!detailsResponse.ok) throw new Error(await detailsResponse.text());
       }
-      setMessage("Saving document…");
+      setMessage(
+        returnAfterSaveRef.current
+          ? "Saving document… You will return to the merge workspace automatically."
+          : "Saving document…",
+      );
       const response = await fetch(
         `${api}/editor-sessions/${sessionRef.current}/save`,
         {
@@ -186,10 +192,12 @@ export default function EditorPage() {
       setMessage(
         "Saving in the document editor… IDMS will add the next version shortly.",
       );
-    } catch {
+    } catch (error) {
       setSaving(false);
       setMessage(
-        "IDMS could not start the save. Your editor remains open; try again.",
+        error instanceof Error
+          ? `IDMS could not start the save: ${error.message}`
+          : "IDMS could not start the save. Your editor remains open; try again.",
       );
     }
   }
