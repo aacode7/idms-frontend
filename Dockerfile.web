@@ -63,6 +63,6 @@ COPY --from=frontend-builder /srv/idms-frontend/node_modules ./node_modules
 COPY --from=frontend-builder /srv/idms-frontend/.next ./.next
 COPY idms-frontend/supervisord.conf /etc/supervisor/conf.d/idms-web.conf
 
-EXPOSE 3000
+EXPOSE 9000
 ENTRYPOINT ["/srv/idms-backend/docker-entrypoint.sh"]
 CMD ["supervisord", "-n", "-c", "/etc/supervisor/conf.d/idms-web.conf"]

@@ -4,7 +4,7 @@ The Next.js workspace includes projects, uploads, legacy analysis/merge/editor w
 
 Copy `.env.example` to `.env.local`, run `npm install`, then `npm run dev`.
 
-Open **Inspect extraction** on a DOCX source/master or in version history. The route pins immutable version and extraction IDs. The configured Neon migration and local deployment are now verified: **http://localhost:3000**. Existing versions are not mass-backfilled; request extraction explicitly. The combined web build includes backend/engine source, while Redis/Celery/dispatcher run separately.
+Open **Inspect extraction** on a DOCX source/master or in version history. The route pins immutable version and extraction IDs. The configured Neon migration and local deployment are now verified: **http://localhost:9000**. Existing versions are not mass-backfilled; request extraction explicitly. The combined web build includes backend/engine source, while Redis/Celery/dispatcher run separately.
 
 `./run.sh extraction` builds matching images, starts Redis, migrates before starting consumers and runs web/worker/dispatcher without ONLYOFFICE. Back up the intended database before migrations. Startup does not reformat source files. No-argument startup also includes ONLYOFFICE for the existing editing workflow.
 
