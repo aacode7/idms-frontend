@@ -54,6 +54,15 @@ const defaultResolutionOptions: Selection["resolutionOptions"] = {
   normalise_tables: true,
 };
 
+function outlineTitle(node: OutlineNode): string {
+  return (
+    (node.display_title ?? node.title) +
+    (["unresolved", "unavailable"].includes(node.label_status ?? "")
+      ? " · numbering unresolved"
+      : "")
+  );
+}
+
 export default function MergePage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [docs, setDocs] = useState<Document[]>([]),
@@ -165,7 +174,7 @@ export default function MergePage() {
     });
     setPlacementCandidate(candidate);
     setMessage(
-      `Planned “${candidate.node.title}” ${position} the selected master heading.`,
+      `Planned “${outlineTitle(candidate.node)}” ${position} the selected master heading.`,
     );
   }
   function chooseForPlacement(document: Document, node: OutlineNode) {
@@ -181,7 +190,7 @@ export default function MergePage() {
     }
     setPlacementCandidate(candidate);
     setMessage(
-      `“${node.title}” is selected. Click a master heading to place it after that heading, or drag it to a gap.`,
+      `“${outlineTitle(node)}” is selected. Click a master heading to place it after that heading, or drag it to a gap.`,
     );
   }
   function placeCandidate(
@@ -205,7 +214,7 @@ export default function MergePage() {
     setDragged(candidate);
     setPlacementCandidate(candidate);
     setMessage(
-      `Drag “${node.title}” to a labelled master gap. The gap label is the exact insertion point.`,
+      `Drag “${outlineTitle(node)}” to a labelled master gap. The gap label is the exact insertion point.`,
     );
   }
   function allowDrop(event: DragEvent, target: string) {
@@ -249,7 +258,7 @@ export default function MergePage() {
         ? masterOutline.find((node) => node.node_key === destination)?.title
         : "the start of the document";
       setMessage(
-        `Planned “${candidate.node.title}” ${position} “${destinationTitle}”.`,
+        `Planned “${outlineTitle(candidate.node)}” ${position} “${destinationTitle}”.`,
       );
     } else {
       setMessage(
@@ -492,7 +501,7 @@ export default function MergePage() {
                       onChange={(e) => toggle(doc, node, e.target.checked)}
                     />
                     <span>
-                      <strong>{node.title}</strong>
+                      <strong>{outlineTitle(node)}</strong>
                       <small>
                         Heading {node.level} · blocks {node.block_index + 1}–
                         {node.end_block_index + 1}
@@ -535,7 +544,7 @@ export default function MergePage() {
                     onDragLeave={() => setDropTarget(null)}
                     onDrop={(event) => dropOn(event, node.node_key, "before")}
                   >
-                    Drop before {node.title}
+                    Drop before {outlineTitle(node)}
                   </div>
                 )}
                 <div
@@ -549,9 +558,7 @@ export default function MergePage() {
                   }
                 >
                   <div>
-                    <strong>
-                      H{node.level} · {node.title}
-                    </strong>
+                    <strong>{outlineTitle(node)}</strong>
                     <small>
                       Master blocks {node.block_index + 1}–
                       {node.end_block_index + 1}
@@ -561,7 +568,7 @@ export default function MergePage() {
                     .filter((s) => s.destination === node.node_key)
                     .map((s) => (
                       <mark key={s.document.id + s.node.node_key}>
-                        {s.position}: {s.node.title}
+                        {s.position}: {outlineTitle(s.node)}
                       </mark>
                     ))}
                 </div>
@@ -573,7 +580,7 @@ export default function MergePage() {
                   onDragLeave={() => setDropTarget(null)}
                   onDrop={(event) => dropOn(event, node.node_key, "after")}
                 >
-                  Drop after {node.title}
+                  Drop after {outlineTitle(node)}
                 </div>
               </div>
             ))}
@@ -622,7 +629,7 @@ export default function MergePage() {
                 <div className="plan-row" key={s.document.id + s.node.node_key}>
                   <span>{i + 1}</span>
                   <div>
-                    <strong>{s.node.title}</strong>
+                    <strong>{outlineTitle(s.node)}</strong>
                     <small>{s.document.filename}</small>
                   </div>
                   <select
@@ -658,7 +665,7 @@ export default function MergePage() {
                     <option value="">End of document</option>
                     {masterOutline.map((n) => (
                       <option key={n.node_key} value={n.node_key}>
-                        {n.title}
+                        {outlineTitle(n)}
                       </option>
                     ))}
                   </select>

@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { fileSha256 } from "../../../../lib/file-checksum";
 import {
   createUploadIntent,
   convertPdf,
@@ -65,7 +66,10 @@ export default function ProjectWorkspacePage() {
     const hasActiveAnalysis = documents.some(
       (document) =>
         document.analysis_status === "queued" ||
-        document.analysis_status === "running",
+        document.analysis_status === "running" ||
+        ["queued", "running", "retry_wait"].includes(
+          document.extraction_status ?? "",
+        ),
     );
     if (!hasActiveAnalysis) return;
     const timer = window.setInterval(async () => {
@@ -85,16 +89,6 @@ export default function ProjectWorkspacePage() {
     }, 2000);
     return () => window.clearInterval(timer);
   }, [documents, projectId]);
-
-  async function sha256(file: File) {
-    const digest = await crypto.subtle.digest(
-      "SHA-256",
-      await file.arrayBuffer(),
-    );
-    return Array.from(new Uint8Array(digest), (byte) =>
-      byte.toString(16).padStart(2, "0"),
-    ).join("");
-  }
 
   async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
@@ -119,7 +113,7 @@ export default function ProjectWorkspacePage() {
         const intent = await createUploadIntent(
           projectId,
           file,
-          await sha256(file),
+          await fileSha256(file),
           "master_candidate",
         );
         completed.push(await uploadDocx(file, intent));
@@ -226,7 +220,10 @@ export default function ProjectWorkspacePage() {
   const analyzingDocuments = documents.filter(
     (document) =>
       document.analysis_status === "queued" ||
-      document.analysis_status === "running",
+      document.analysis_status === "running" ||
+      ["queued", "running", "retry_wait"].includes(
+        document.extraction_status ?? "",
+      ),
   );
   const compositionDocuments = documents.filter(
     (document) => document.role === "master" || document.role === "source",
@@ -234,9 +231,52 @@ export default function ProjectWorkspacePage() {
   const allDocumentsAnalyzed =
     compositionDocuments.length > 0 &&
     compositionDocuments.every(
-      (document) => document.analysis_status === "completed",
+      (document) =>
+        document.analysis_status === "completed" &&
+        !["queued", "running", "retry_wait", "failed"].includes(
+          document.extraction_status ?? "",
+        ),
     );
   const analysisLabel = (document: Document) => {
+    if (document.extraction_status === "queued")
+      return "Deep extraction queued…";
+    if (document.extraction_status === "retry_wait")
+      return "Deep extraction waiting to retry…";
+    if (document.extraction_status === "failed")
+      if (document.extraction_error_code === "database_capacity_exceeded")
+        return "Extraction could not be saved: database storage capacity reached";
+    if (document.extraction_status === "failed")
+      return document.extraction_error_code === "extraction_limit_exceeded"
+        ? "Deep extraction exceeds the supported size or complexity limits"
+        : "Deep extraction failed — inspect extraction for details";
+    if (document.extraction_status === "running") {
+      if (
+        document.extraction_stage === "validating" &&
+        document.extraction_total_records != null &&
+        document.extraction_validated_records != null
+      ) {
+        return document.extraction_validated_records ===
+          document.extraction_total_records
+          ? "Checking extraction relationships…"
+          : `Validating extraction: ${document.extraction_validated_records.toLocaleString()} / ${document.extraction_total_records.toLocaleString()} records`;
+      }
+      const stages: Record<string, string> = {
+        downloading: "Downloading document…",
+        indexing: "Parsing document XML…",
+        validating: "Validating extraction…",
+        uploading: "Storing and verifying extraction…",
+        publishing: "Publishing extraction indexes…",
+      };
+      return (
+        stages[document.extraction_stage ?? ""] ??
+        "Deep extraction in progress…"
+      );
+    }
+    if (
+      document.extraction_status === "completed" &&
+      document.analysis_status === "completed"
+    )
+      return "Analysis and deep extraction complete";
     if (document.analysis_status === "completed") return "Analysis complete";
     if (document.analysis_status === "running") return "Analyzing…";
     if (document.analysis_status === "queued") return "Analysis queued…";
@@ -294,7 +334,7 @@ export default function ProjectWorkspacePage() {
           {analyzingDocuments.length > 0 && (
             <p className="analysis-indicator" role="status" aria-live="polite">
               <span className="analysis-spinner" aria-hidden="true" />
-              Analyzing {analyzingDocuments.length} document
+              Processing {analyzingDocuments.length} document
               {analyzingDocuments.length === 1 ? "" : "s"} in the background…
             </p>
           )}

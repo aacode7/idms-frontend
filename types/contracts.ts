@@ -18,6 +18,17 @@ export type Document = {
   status: "upload_pending" | "uploaded";
   analysis_status:
     "not_started" | "queued" | "running" | "completed" | "failed";
+  extraction_status?:
+    | "not_started"
+    | "queued"
+    | "running"
+    | "retry_wait"
+    | "completed"
+    | "failed";
+  extraction_stage?: string | null;
+  extraction_error_code?: string | null;
+  extraction_validated_records?: number | null;
+  extraction_total_records?: number | null;
   version_id: string;
   created_at: string;
 };
@@ -31,6 +42,9 @@ export type UploadIntent = {
 };
 
 export type OutlineNode = {
+  automatic_label?: string | null;
+  label_status?: string;
+  display_title?: string | null;
   node_key: string;
   title: string;
   level: number;

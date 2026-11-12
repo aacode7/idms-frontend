@@ -351,6 +351,11 @@ function VersionInspection({
           {starting ? "Requesting…" : "Request extraction"}
         </button>
         <p className="ex-help">
+          Use profile “large” for files up to 18 MiB or documents that exceed
+          the standard output limits. New uploads from 8–18 MiB select it
+          automatically on the standard server configuration.
+        </p>
+        <p className="ex-help">
           Identical requests reuse a revision. A changed parser/profile creates
           a new interpretation; saved versions stay immutable.
         </p>
