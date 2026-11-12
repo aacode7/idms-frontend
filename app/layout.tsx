@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./styles.css";
+import "./extraction.css";
 
 export const metadata: Metadata = {
   title: "IDMS | Document composition workspace",

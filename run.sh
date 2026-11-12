@@ -12,16 +12,32 @@ start_backend_services() {
 }
 
 apply_web_migrations() {
-  echo "Building combined web service and applying database migrations..."
-  docker compose --env-file "${script_dir}/.env.local" \
-    --project-directory "${script_dir}" -f "${compose_file}" build web
+  echo "Applying database migrations before starting application consumers..."
   docker compose --env-file "${script_dir}/.env.local" \
     --project-directory "${script_dir}" -f "${compose_file}" \
     run --rm --no-deps web sh -c 'cd /srv/idms-backend && alembic upgrade head'
 }
 
-echo "Formatting frontend..."
-(cd "${script_dir}" && npm run format)
+build_runtime() {
+  docker compose --project-directory "${backend_dir}" -f "${backend_dir}/docker-compose.yml" \
+    build worker extraction-dispatcher
+  docker compose --env-file "${script_dir}/.env.local" \
+    --project-directory "${script_dir}" -f "${compose_file}" build web
+}
+
+start_runtime() {
+  local mode="${1:-full}"
+  build_runtime
+  start_backend_services redis
+  apply_web_migrations
+  if [[ "${mode}" == "extraction" ]]; then
+    start_backend_services --no-build worker extraction-dispatcher
+  else
+    start_backend_services --no-build worker extraction-dispatcher onlyoffice
+  fi
+  docker compose --env-file "${script_dir}/.env.local" \
+    --project-directory "${script_dir}" -f "${compose_file}" up -d --no-build web
+}
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker is required but was not found in PATH." >&2
@@ -34,23 +50,17 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 
 if [[ $# -eq 0 ]]; then
-  echo "Starting worker, Redis, and ONLYOFFICE..."
-  start_backend_services --build
-  apply_web_migrations
-  echo "Starting combined web service..."
-  exec docker compose --env-file "${script_dir}/.env.local" \
-    --project-directory "${script_dir}" -f "${compose_file}" up -d
+  start_runtime full
+  exit
 fi
 
 case "$1" in
   rebuild)
-    echo "Rebuilding worker, Redis, and ONLYOFFICE..."
-    start_backend_services --build --force-recreate --remove-orphans
-    apply_web_migrations
-    echo "Rebuilding and recreating combined web service..."
-    exec docker compose --env-file "${script_dir}/.env.local" \
-      --project-directory "${script_dir}" -f "${compose_file}" \
-      up -d --force-recreate
+    start_runtime full
+    ;;
+  extraction)
+    # Extraction does not require ONLYOFFICE or the host's port 8000.
+    start_runtime extraction
     ;;
   down|stop|restart|logs|ps)
     exec docker compose --env-file "${script_dir}/.env.local" \

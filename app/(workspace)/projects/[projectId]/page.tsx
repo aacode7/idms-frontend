@@ -319,6 +319,14 @@ export default function ProjectWorkspacePage() {
                   </span>
                   {document.status === "uploaded" && (
                     <span className="document-actions">
+                      {!document.filename.toLowerCase().endsWith(".pdf") && (
+                        <a
+                          className="button secondary"
+                          href={`/documents/${document.id}/extraction?version=${document.version_id}`}
+                        >
+                          Inspect extraction
+                        </a>
+                      )}
                       {document.filename.toLowerCase().endsWith(".pdf") && (
                         <button
                           type="button"
@@ -378,6 +386,12 @@ export default function ProjectWorkspacePage() {
               <small>{analysisLabel(master)}</small>
               {master.status === "uploaded" && (
                 <span className="document-actions">
+                  <a
+                    className="button secondary"
+                    href={`/documents/${master.id}/extraction?version=${master.version_id}`}
+                  >
+                    Inspect extraction
+                  </a>
                   <button
                     type="button"
                     className="secondary"

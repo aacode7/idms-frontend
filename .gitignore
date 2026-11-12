@@ -2,3 +2,24 @@ node_modules/
 .next/
 .env.local
 *.tsbuildinfo
+test-results/
+playwright-report/
+
+# Local agent guides, plans, checkpoints and handoff notes
+AGENTS.md
+AGENT*.md
+CLAUDE.md
+IDMS_*.md
+/docs/EXTRACTION*.md
+/docs/DEEP_EXTRACTION.md
+/docs/STYLES_AND_HEADINGS.md
+/docs/NUMBERING.md
+/docs/FIELDS_AND_REFERENCES.md
+/docs/RECOGNITION_AND_DELIMITERS.md
+
+# Local input documents
+/*.docx
+
+# Keep Markdown local, except README.md at any directory depth
+*.[mM][dD]
+!**/README.md

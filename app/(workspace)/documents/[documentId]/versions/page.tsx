@@ -267,6 +267,14 @@ export default function VersionsPage() {
             {focused ? `Version ${focused.version_number}` : "Nothing selected"}
           </h2>
           <div className="action-stack">
+            {focused && (
+              <a
+                className="button secondary"
+                href={`/documents/${documentId}/extraction?version=${focused.id}`}
+              >
+                Inspect extraction
+              </a>
+            )}
             <button
               type="button"
               onClick={() =>
