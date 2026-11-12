@@ -14,6 +14,9 @@ services:
     environment:
       # The Next.js route handler reaches Uvicorn in this same container.
       IDMS_API_INTERNAL_URL: http://127.0.0.1:8000
+      # ONLYOFFICE reaches the API through Next.js on the Docker network.
+      ONLYOFFICE_API_INTERNAL_URL: http://web:9000
+      ONLYOFFICE_CALLBACK_URL: http://web:9000/api/v1/integrations/onlyoffice/callback
     ports:
       - "0.0.0.0:9000:9000"
     restart: unless-stopped
