@@ -242,13 +242,15 @@ export default function ProjectWorkspacePage() {
       return "Deep extraction queued…";
     if (document.extraction_status === "retry_wait")
       return "Deep extraction waiting to retry…";
-    if (document.extraction_status === "failed")
+    if (document.extraction_status === "failed") {
+      if (document.extraction_error_code === "lookup_capacity_exceeded")
+        return "Extraction index exceeds server capacity; inspect extraction for details";
       if (document.extraction_error_code === "database_capacity_exceeded")
         return "Extraction could not be saved: database storage capacity reached";
-    if (document.extraction_status === "failed")
       return document.extraction_error_code === "extraction_limit_exceeded"
         ? "Deep extraction exceeds the supported size or complexity limits"
         : "Deep extraction failed — inspect extraction for details";
+    }
     if (document.extraction_status === "running") {
       if (
         document.extraction_stage === "validating" &&
@@ -264,6 +266,7 @@ export default function ProjectWorkspacePage() {
         downloading: "Downloading document…",
         indexing: "Parsing document XML…",
         validating: "Validating extraction…",
+        building_lookup: "Preparing extraction index…",
         uploading: "Storing and verifying extraction…",
         publishing: "Publishing extraction indexes…",
       };

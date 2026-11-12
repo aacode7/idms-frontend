@@ -123,6 +123,16 @@ async function mock(page: Page, handler?: Handler) {
         profileDigest: pin.profileDigest,
         profile: { recognition: { identifier_rules: [] } },
       };
+    else if (path === "/extraction-profiles")
+      payload = {
+        items: [
+          {
+            profileId: "default",
+            identifierRuleCount: 0,
+            placeholderGrammarCount: 1,
+          },
+        ],
+      };
     else if (path.startsWith("/extraction-profiles/"))
       payload = {
         profileId: "default",
@@ -771,4 +781,20 @@ test("live browser -> same-origin proxy -> API -> persisted actual-engine artifa
     path: "test-results/extraction-live.png",
     fullPage: true,
   });
+});
+
+test("profile catalog makes missing business identifier rules visible", async ({
+  page,
+}) => {
+  await mock(page);
+  await open(page);
+  await expect(
+    page.getByText(
+      "No business identifier rules are configured for this profile.",
+      { exact: false },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.locator("#approved-extraction-profiles option"),
+  ).toHaveAttribute("value", "default");
 });

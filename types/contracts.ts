@@ -79,6 +79,8 @@ export type MergeResult = {
   generated_document_id: string;
   source_node_keys: string[];
   editor_anchor_ids: string[];
+  preservation_status?: string;
+  toc_refresh_status?: string;
 };
 
 export type DocumentVersion = {

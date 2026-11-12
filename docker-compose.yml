@@ -22,6 +22,9 @@ services:
     env_file:
       - ../idms-backend/.env
       - .env.local
+      - ../idms-backend/.local/local-settings.env
+    volumes:
+      - ../idms-backend/storage/objects:/data/objects
     environment:
       # The Next.js route handler reaches Uvicorn in this same container.
       IDMS_API_INTERNAL_URL: http://127.0.0.1:8000

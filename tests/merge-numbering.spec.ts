@@ -56,3 +56,32 @@ test("source and master maps show document numbering and preserve selection iden
     }),
   ).toBeVisible();
 });
+
+test("saved merge distinguishes preservation checks from pending TOC pagination", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    await route.fulfill({
+      json: path.endsWith("/merge-results")
+        ? [
+            {
+              generated_document_id: "result",
+              generated_version_id: "version",
+              source_node_keys: ["heading-1"],
+              editor_anchor_ids: ["idms_merge_1"],
+              preservation_status: "passed",
+              toc_refresh_status: "pending_layout",
+            },
+          ]
+        : [],
+    });
+  });
+  await page.goto("/projects/project/merge");
+  await expect(
+    page.getByText("Original document structure passed preservation checks."),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Table of contents refresh required/),
+  ).toBeVisible();
+});

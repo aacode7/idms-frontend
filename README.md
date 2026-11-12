@@ -9,3 +9,13 @@ Open **Inspect extraction** on a DOCX source/master or in version history. The r
 `./run.sh extraction` builds matching images, starts Redis, migrates before starting consumers and runs web/worker/dispatcher without ONLYOFFICE. Back up the intended database before migrations. Startup does not reformat source files. No-argument startup also includes ONLYOFFICE for the existing editing workflow.
 
 Validation: `npm run build`, `npx tsc --noEmit`, then `npm run test:extraction` after installing Chromium with `npx playwright install chromium`. The optional live case requires an explicitly authorized runtime fixture; see the guide. E9 completed on the recorded Sol · High task route; no next task is automatically authorized.
+
+### Local backend deployment
+
+The `web` service reads the backend's private local settings and mounts
+`../idms-backend/storage/objects` at `/data/objects`. Set
+`IDMS_LOCAL_DATABASE_URL` in `.env.local` to the Docker-network PostgreSQL URL;
+keep credentials private. Start the backend's `postgres` service and initialize
+its schema before starting this stack. Uploads use the existing same-origin API
+proxy; filesystem mode returns signed `/api/v1/storage/objects` URLs. Existing
+external S3 upload URLs remain supported by the same client.

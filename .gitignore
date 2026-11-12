@@ -23,3 +23,7 @@ IDMS_*.md
 # Keep Markdown local, except README.md at any directory depth
 *.[mM][dD]
 !**/README.md
+
+# Runtime data and private migration backups
+/storage/
+/.local/

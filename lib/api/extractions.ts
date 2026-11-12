@@ -47,6 +47,14 @@ async function request<T>(
 }
 
 export const extractionApi = {
+  profiles: (signal?: AbortSignal) =>
+    request<{
+      items: {
+        profileId: string;
+        identifierRuleCount: number;
+        placeholderGrammarCount: number;
+      }[];
+    }>("/extraction-profiles", signal),
   versions: (document: string, signal?: AbortSignal) =>
     request<DocumentVersion[]>(
       `/documents/${segment(document)}/versions`,

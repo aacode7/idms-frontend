@@ -30,3 +30,6 @@
 **/__pycache__/**
 **/*.pyc
 **/.env*
+
+idms-backend/storage/**
+idms-backend/.local/**

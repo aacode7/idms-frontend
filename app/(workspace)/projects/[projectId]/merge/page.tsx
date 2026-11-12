@@ -351,14 +351,20 @@ export default function MergePage() {
             setOpen(null);
             setMergeFinished(true);
             setMessage(
-              "Merge complete and saved as version 1. Open it to edit and save later versions.",
+              "Merge complete and saved as a new version. Open it to review and update the table of contents.",
             );
           }
           if (status.status === "failed") {
             window.clearInterval(timer);
             setMergeProgress(0);
             setMerging(false);
-            setMessage("Merge failed. Review your selections and try again.");
+            setMessage(
+              status.error_code === "merge_validation_failed"
+                ? "Merge stopped because document preservation checks failed. No new version was saved."
+                : status.error_code === "merge_plan_invalid"
+                  ? "The saved merge plan could not be verified. Review your selections and submit a new merge."
+                  : "Merge failed. Review your selections and try again.",
+            );
           }
         } catch {
           window.clearInterval(timer);
@@ -703,6 +709,17 @@ export default function MergePage() {
                     {result.editor_anchor_ids.length === 1 ? "" : "s"}; use the
                     up/down controls in the editor to review each one.
                   </small>
+                  {result.preservation_status === "passed" && (
+                    <small>
+                      Original document structure passed preservation checks.
+                    </small>
+                  )}
+                  {result.toc_refresh_status === "pending_layout" && (
+                    <small>
+                      Table of contents refresh required: update it in the
+                      editor to recalculate entries and page numbers.
+                    </small>
+                  )}
                   <button
                     type="button"
                     className="secondary delete-document"

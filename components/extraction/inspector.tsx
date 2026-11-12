@@ -214,6 +214,26 @@ function VersionInspection({
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [profile, setProfile] = useState("default");
+  const [profileChoices, setProfileChoices] = useState<
+    {
+      profileId: string;
+      identifierRuleCount: number;
+      placeholderGrammarCount: number;
+    }[]
+  >([]);
+  useEffect(() => {
+    const controller = new AbortController();
+    extractionApi
+      .profiles(controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted && Array.isArray(result.items))
+          setProfileChoices(result.items);
+      })
+      .catch(() => {
+        /* Manual approved-profile lookup remains available. */
+      });
+    return () => controller.abort();
+  }, []);
   const [approved, setApproved] = useState<ProfileSnapshot | null>(null);
   const [starting, setStarting] = useState(false);
   const action = useRef<AbortController | null>(null);
@@ -328,6 +348,7 @@ function VersionInspection({
           Approved profile ID
           <input
             aria-label="Approved profile ID"
+            list="approved-extraction-profiles"
             value={profile}
             maxLength={80}
             pattern="[A-Za-z0-9_.-]+"
@@ -339,6 +360,19 @@ function VersionInspection({
             }}
           />
         </label>
+        <datalist id="approved-extraction-profiles">
+          {profileChoices.map((choice) => (
+            <option key={choice.profileId} value={choice.profileId} />
+          ))}
+        </datalist>
+        {profileChoices.find((choice) => choice.profileId === profile)
+          ?.identifierRuleCount === 0 && (
+          <p className="ex-help">
+            No business identifier rules are configured for this profile. Codes
+            remain in the original text; named identifiers require approved
+            recognition rules.
+          </p>
+        )}
         <button
           type="button"
           className="secondary"
