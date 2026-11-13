@@ -378,6 +378,10 @@ button:disabled {
   font-size: 0.9rem;
   margin: 0.9rem 0 0;
 }
+.plan-row .plan-level-error {
+  color: #b42318;
+}
+
 .feedback.error {
   color: #ffb4b4;
 }

@@ -39,6 +39,7 @@ type Selection = {
     adopt_heading_paragraph_format: boolean;
     renumber_manual_headings: boolean;
     promote_to_top_level: boolean;
+    promote_to_parent_level: boolean;
     normalise_tables: boolean;
   };
 };
@@ -53,6 +54,7 @@ const defaultResolutionOptions: Selection["resolutionOptions"] = {
   adopt_heading_paragraph_format: true,
   renumber_manual_headings: true,
   promote_to_top_level: false,
+  promote_to_parent_level: false,
   normalise_tables: true,
 };
 
@@ -99,6 +101,27 @@ export default function MergePage() {
     (d) => d.role === "source" || d.role === "master_candidate",
   );
   const masterOutline = master ? (outlines[master.id] ?? []) : [];
+  function immediateParent(
+    destination: string | null,
+  ): OutlineNode | undefined {
+    const target = masterOutline.find((node) => node.node_key === destination);
+    return target?.parent_node_key
+      ? masterOutline.find((node) => node.node_key === target.parent_node_key)
+      : undefined;
+  }
+  function parentLevelError(selection: Selection): string | null {
+    if (!selection.resolutionOptions.promote_to_parent_level) return null;
+    if (immediateParent(selection.destination)) return null;
+    const target = masterOutline.find(
+      (node) => node.node_key === selection.destination,
+    );
+    return target?.level === 1
+      ? `Destination “${outlineTitle(target)}” is a top-level heading and has no parent. Choose “Same heading level” or “New numbered chapter”.`
+      : "Choose a destination with an immediate parent heading.";
+  }
+  const invalidParentLevel = selected.some(
+    (selection) => !!parentLevelError(selection),
+  );
   const compatibilityGroups = useMemo(() => {
     const groups = new Map<number, Diagnostic[]>();
     for (const finding of preview?.diagnostics ?? []) {
@@ -290,7 +313,33 @@ export default function MergePage() {
       "Compatibility choices updated. The checked adjustments will be applied to the new immutable merge.",
     );
   }
+  function setInsertionLevel(index: number, value: string) {
+    setPreview(null);
+    setSelected((items) =>
+      items.map((item, n) =>
+        n === index
+          ? {
+              ...item,
+              resolutionOptions: {
+                ...item.resolutionOptions,
+                promote_to_top_level: value === "top",
+                promote_to_parent_level: value === "parent",
+              },
+            }
+          : item,
+      ),
+    );
+  }
+  function setDestination(index: number, destination: string) {
+    setPreview(null);
+    setSelected((items) =>
+      items.map((item, n) =>
+        n === index ? { ...item, destination: destination || null } : item,
+      ),
+    );
+  }
   async function check() {
+    if (invalidParentLevel) return;
     setChecking(true);
     setMessage(
       "Checking compatibility… Large DOCX files can take up to two minutes.",
@@ -307,7 +356,7 @@ export default function MergePage() {
     }
   }
   async function merge() {
-    if (!master || !selected.length) return;
+    if (!master || !selected.length || invalidParentLevel) return;
     setMerging(true);
     setMergeProgress(5);
     setMergeStage("Preparing merge");
@@ -628,17 +677,22 @@ export default function MergePage() {
                   </h2>
                 </div>
                 {selected.length > 0 && (
-                  <span className="selection-status">Ready to review</span>
+                  <span className="selection-status">
+                    {invalidParentLevel
+                      ? "Heading level needs attention"
+                      : "Ready to review"}
+                  </span>
                 )}
               </div>
               {selected.length > 0 && (
                 <p className="pane-help" role="note">
                   Heading numbers are recalculated in document order, and the
                   TOC follows the new numbers. “Same heading level” keeps the
-                  destination’s heading depth, not its existing numbers. Adding
-                  a numbered chapter before Introduction can change 1 to 2 and
-                  1.2.2 to 2.2.2. Final numbers depend on the entire insertion
-                  plan.
+                  destination’s heading depth, not its existing numbers. “Same
+                  level as immediate parent” places the section before or after
+                  that parent’s complete section. Adding a numbered chapter
+                  before Introduction can change 1 to 2 and 1.2.2 to 2.2.2.
+                  Final numbers depend on the entire insertion plan.
                 </p>
               )}
               {!selected.length && (
@@ -652,6 +706,18 @@ export default function MergePage() {
                   <div>
                     <strong>{outlineTitle(s.node)}</strong>
                     <small>{s.document.filename}</small>
+                    {parentLevelError(s) && (
+                      <small className="plan-level-error" role="alert">
+                        {parentLevelError(s)}
+                      </small>
+                    )}
+                    {s.resolutionOptions.promote_to_parent_level &&
+                      immediateParent(s.destination) && (
+                        <small>
+                          {s.position === "before" ? "Before" : "After"} parent:{" "}
+                          {outlineTitle(immediateParent(s.destination)!)}
+                        </small>
+                      )}
                   </div>
                   <select
                     value={s.position}
@@ -675,25 +741,12 @@ export default function MergePage() {
                     value={
                       s.resolutionOptions.promote_to_top_level
                         ? "top"
-                        : "sibling"
+                        : s.resolutionOptions.promote_to_parent_level
+                          ? "parent"
+                          : "sibling"
                     }
                     aria-label="Inserted section level"
-                    onChange={(e) =>
-                      setSelected((v) =>
-                        v.map((x, n) =>
-                          n === i
-                            ? {
-                                ...x,
-                                resolutionOptions: {
-                                  ...x.resolutionOptions,
-                                  promote_to_top_level:
-                                    e.target.value === "top",
-                                },
-                              }
-                            : x,
-                        ),
-                      )
-                    }
+                    onChange={(e) => setInsertionLevel(i, e.target.value)}
                   >
                     <option value="sibling">
                       Same heading level — renumbers
@@ -701,18 +754,13 @@ export default function MergePage() {
                     <option value="top">
                       New numbered chapter — shifts later numbers
                     </option>
+                    <option value="parent">
+                      Same level as immediate parent
+                    </option>
                   </select>
                   <select
                     value={s.destination ?? ""}
-                    onChange={(e) =>
-                      setSelected((v) =>
-                        v.map((x, n) =>
-                          n === i
-                            ? { ...x, destination: e.target.value || null }
-                            : x,
-                        ),
-                      )
-                    }
+                    onChange={(e) => setDestination(i, e.target.value)}
                   >
                     <option value="">End of document</option>
                     {masterOutline.map((n) => (
@@ -962,6 +1010,7 @@ export default function MergePage() {
                 className="secondary"
                 disabled={
                   !selected.length ||
+                  invalidParentLevel ||
                   !!placementCandidate ||
                   checking ||
                   merging
@@ -975,6 +1024,7 @@ export default function MergePage() {
                 disabled={
                   !master ||
                   !selected.length ||
+                  invalidParentLevel ||
                   !!placementCandidate ||
                   checking ||
                   merging

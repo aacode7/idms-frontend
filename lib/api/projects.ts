@@ -177,6 +177,8 @@ export const createMergeJob = (
       adopt_heading_emphasis: boolean;
       adopt_heading_paragraph_format: boolean;
       renumber_manual_headings: boolean;
+      promote_to_parent_level?: boolean;
+      promote_to_top_level?: boolean;
       normalise_tables: boolean;
     };
   }>,
@@ -206,6 +208,8 @@ export const previewMerge = (
       adopt_heading_emphasis: boolean;
       adopt_heading_paragraph_format: boolean;
       renumber_manual_headings: boolean;
+      promote_to_parent_level?: boolean;
+      promote_to_top_level?: boolean;
       normalise_tables: boolean;
     };
   }>,
