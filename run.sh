@@ -20,7 +20,7 @@ apply_web_migrations() {
 
 build_runtime() {
   docker compose --project-directory "${backend_dir}" -f "${backend_dir}/docker-compose.yml" \
-    build worker extraction-dispatcher
+    build worker extraction-worker extraction-dispatcher
   docker compose --env-file "${script_dir}/.env.local" \
     --project-directory "${script_dir}" -f "${compose_file}" build web
 }
@@ -31,12 +31,15 @@ start_runtime() {
   start_backend_services redis
   apply_web_migrations
   if [[ "${mode}" == "extraction" ]]; then
-    start_backend_services --no-build worker extraction-dispatcher
+    # Recreate the extraction worker from the same source build as the web/API
+    # image. Parser identities are pinned per revision, so mixed images can
+    # reject otherwise valid new extractions.
+    start_backend_services --no-build --force-recreate worker extraction-worker extraction-dispatcher
   else
-    start_backend_services --no-build worker extraction-dispatcher onlyoffice
+    start_backend_services --no-build --force-recreate worker extraction-worker extraction-dispatcher onlyoffice
   fi
   docker compose --env-file "${script_dir}/.env.local" \
-    --project-directory "${script_dir}" -f "${compose_file}" up -d --no-build web
+    --project-directory "${script_dir}" -f "${compose_file}" up -d --no-build --force-recreate web
 }
 
 if ! command -v docker >/dev/null 2>&1; then

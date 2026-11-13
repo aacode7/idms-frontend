@@ -765,6 +765,8 @@ small {
 }
 .delete-dialog {
   width: min(480px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
   border-radius: 18px;
   background: #fff;
   box-shadow: 0 20px 60px rgba(16, 33, 59, 0.25);
@@ -773,7 +775,9 @@ small {
 .delete-dialog h2 {
   color: #152b47;
   font-size: 1.45rem;
+  line-height: 1.2;
   margin: 0.25rem 0 12px;
+  overflow-wrap: anywhere;
 }
 .delete-dialog p:not(.eyebrow) {
   color: #60748d;
@@ -785,6 +789,27 @@ small {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 24px;
+}
+.delete-dialog button {
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .delete-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+  .delete-dialog {
+    width: 100%;
+    padding: 22px;
+    border-radius: 16px;
+  }
+  .delete-dialog > div {
+    flex-direction: column-reverse;
+  }
+  .delete-dialog > div button {
+    width: 100%;
+  }
 }
 .danger {
   background: #c9364a;
@@ -996,6 +1021,33 @@ small {
   color: #062b34;
   white-space: nowrap;
 }
+.editor-download {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid #adc3df;
+  border-radius: 8px;
+  background: #fff;
+  color: #2457a8;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.editor-download:hover {
+  border-color: #729bd2;
+  background: #f0f6ff;
+}
+.editor-download:focus-visible {
+  outline: 3px solid #85b4f5;
+  outline-offset: 2px;
+}
 .editor-change-navigation {
   display: flex;
   align-items: center;
@@ -1060,6 +1112,7 @@ small {
     width: 100%;
   }
   .editor-save,
+  .editor-download,
   .editor-history {
     width: max-content;
   }

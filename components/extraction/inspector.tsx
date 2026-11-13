@@ -704,6 +704,19 @@ function CompletedInspection({ pin }: { pin: ExtractionRevision }) {
         : { route: "collections", collection, filters: filter });
   return (
     <div className="ex-completed">
+      <section aria-label="Feature interpretation coverage">
+        <h2>Interpretation by feature</h2>
+        <p>Completion means the extraction was published. Resolved states cover the supported interpretation; cached values and declared geometry still need layout verification.</p>
+        <div className="ex-facts">
+          {([['numbering', 'All collections', 'numberingLabels'], ['toc', 'TOC and fields', 'tocEntryChecks'], ['formatting', 'All collections', 'propertySets'], ['tables', 'Tables', 'cells'], ['images', 'Images and drawings', 'imageOccurrences'], ['recognition', 'Identifiers', 'identifierOccurrences']] as const).map(([feature, , target]) => (
+            <div key={feature}>
+              <strong>{feature}</strong>
+              <p>{pin.summary.featureSummary?.[feature] ? Object.entries(pin.summary.featureSummary[feature]).map(([state, count]) => `${state}: ${count}`).join(' · ') || 'No occurrences; support is not implied.' : 'Detailed states unavailable in this historical revision.'}</p>
+              <button className="secondary" onClick={() => browse({ route: 'collections', collection: target, filters: {} })}>Inspect {feature} evidence</button>
+            </div>
+          ))}
+        </div>
+      </section>
       <details className="ex-summary">
         <summary>Counts and diagnostic summary</summary>
         <p>

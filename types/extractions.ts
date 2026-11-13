@@ -31,6 +31,7 @@ export type ExtractionRevision = {
     collections?: Record<string, { recordCount: number; shardCount: number }>;
     semanticDigest?: string;
     locatorEncoding?: string;
+    featureSummary?: Record<string, Record<string, number>>;
   };
 };
 

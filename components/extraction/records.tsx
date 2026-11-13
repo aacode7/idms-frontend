@@ -310,11 +310,17 @@ export function RecordCard({
           <Fact label="Format" value={r.numberFormat} />
           <Fact label="Counter event" value={r.counterEvent} />
           <Fact label="Issues" value={r.issues} />
+          <Fact label="Bullet glyph and font evidence" value={r.bulletEvidence} />
         </dl>
       )}
       <dl className="ex-facts">
         {[
           "code",
+          "semanticKind",
+          "entryLevel",
+          "comparisonStatus",
+          "pageComparisonStatus",
+          "freshness",
           "extractionStatus",
           "semanticStatus",
           "referenceStatus",
@@ -339,6 +345,10 @@ export function RecordCard({
           <Fact key={key} label={key} value={r[key]} />
         ))}
       </dl>
+      {type === "diagnostic" && (
+        <p className="ex-help">{text(r.code).startsWith('reference.') ? 'Unresolved source reference. Inspect the target evidence; this warning alone does not establish extraction loss.' : text(r.code).startsWith('relationship.external') ? 'External source target was not fetched.' : 'Interpretation limitation. Original source evidence remains available at the location below.'}</p>
+      )}
+      {r.semanticKind === 'editorial_note' && <p className="ex-notice">Editorial note marker identified. No content has been deleted or replaced.</p>}
       {(type === "toc" || type === "toc_entry" || type === "field") && (
         <p className="ex-notice">
           Saved field/TOC results are cached source evidence. Current pagination

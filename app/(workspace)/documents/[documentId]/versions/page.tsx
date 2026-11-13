@@ -290,6 +290,17 @@ export default function VersionsPage() {
             <a className="button secondary" href={focused?.download_url}>
               Download file
             </a>
+            <a
+              className="button secondary"
+              href={
+                focused
+                  ? `/api/v1/documents/${documentId}/versions/${focused.id}/download-clean`
+                  : undefined
+              }
+              aria-disabled={!focused}
+            >
+              Download clean DOCX
+            </a>
             <button
               type="button"
               className="secondary"

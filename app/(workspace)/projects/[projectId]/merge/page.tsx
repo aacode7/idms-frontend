@@ -38,6 +38,7 @@ type Selection = {
     adopt_heading_emphasis: boolean;
     adopt_heading_paragraph_format: boolean;
     renumber_manual_headings: boolean;
+    promote_to_top_level: boolean;
     normalise_tables: boolean;
   };
 };
@@ -51,6 +52,7 @@ const defaultResolutionOptions: Selection["resolutionOptions"] = {
   adopt_heading_emphasis: true,
   adopt_heading_paragraph_format: true,
   renumber_manual_headings: true,
+  promote_to_top_level: false,
   normalise_tables: true,
 };
 
@@ -76,6 +78,7 @@ export default function MergePage() {
     [merging, setMerging] = useState(false),
     [mergeFinished, setMergeFinished] = useState(false),
     [mergeProgress, setMergeProgress] = useState(0),
+    [mergeStage, setMergeStage] = useState("Generating merged document"),
     [mergedDocumentName, setMergedDocumentName] = useState(""),
     [initialMergeDescription, setInitialMergeDescription] = useState(""),
     [deletingMergeDocumentId, setDeletingMergeDocumentId] = useState<
@@ -127,28 +130,28 @@ export default function MergePage() {
   }
   function toggle(document: Document, node: OutlineNode, checked: boolean) {
     setPreview(null);
-    setSelected((v) =>
-      checked
-        ? [
-            ...v,
-            {
-              document,
-              node,
-              destination: masterOutline[0]?.node_key ?? null,
-              position: "after",
-              resolutionOptions: defaultResolutionOptions,
-            },
-          ]
-        : v.filter(
-            (x) =>
-              !(
-                x.document.id === document.id &&
-                x.node.node_key === node.node_key
-              ),
+    if (checked) {
+      chooseForPlacement(document, node);
+      return;
+    }
+    setSelected((items) =>
+      items.filter(
+        (item) =>
+          !(
+            item.document.id === document.id &&
+            item.node.node_key === node.node_key
           ),
+      ),
     );
-    setPlacementCandidate(checked ? { document, node } : null);
+    setPlacementCandidate((candidate) =>
+      candidate?.document.id === document.id &&
+      candidate.node.node_key === node.node_key
+        ? null
+        : candidate,
+    );
+    setMessage(`“${outlineTitle(node)}” was deselected.`);
   }
+
   function upsertSelection(
     candidate: Pick<Selection, "document" | "node">,
     destination: string | null,
@@ -172,22 +175,13 @@ export default function MergePage() {
         ? items.map((item) => (item === existing ? next : item))
         : [...items, next];
     });
-    setPlacementCandidate(candidate);
+    setPlacementCandidate(null);
     setMessage(
       `Planned “${outlineTitle(candidate.node)}” ${position} the selected master heading.`,
     );
   }
   function chooseForPlacement(document: Document, node: OutlineNode) {
     const candidate = { document, node };
-    if (
-      !selected.some(
-        (item) =>
-          item.document.id === document.id &&
-          item.node.node_key === node.node_key,
-      )
-    ) {
-      upsertSelection(candidate, masterOutline[0]?.node_key ?? null, "after");
-    }
     setPlacementCandidate(candidate);
     setMessage(
       `“${outlineTitle(node)}” is selected. Click a master heading to place it after that heading, or drag it to a gap.`,
@@ -316,6 +310,7 @@ export default function MergePage() {
     if (!master || !selected.length) return;
     setMerging(true);
     setMergeProgress(5);
+    setMergeStage("Preparing merge");
     try {
       const job = await createMergeJob(projectId, operations(), {
         generated_filename: mergedDocumentName.trim() || undefined,
@@ -334,6 +329,12 @@ export default function MergePage() {
             setMergeProgress((value) => Math.max(value, 25));
           if (status.stage === "merging")
             setMergeProgress((value) => Math.max(value, 55));
+          if (status.stage === "refreshing_toc") {
+            setMergeStage(
+              "Refreshing table of contents and lists (large documents can take several minutes)",
+            );
+            setMergeProgress((value) => Math.max(value, 70));
+          }
           if (status.stage === "persisting")
             setMergeProgress((value) => Math.max(value, 80));
           if (status.status === "completed") {
@@ -499,11 +500,15 @@ export default function MergePage() {
                   >
                     <input
                       type="checkbox"
-                      checked={selected.some(
-                        (s) =>
-                          s.document.id === doc.id &&
-                          s.node.node_key === node.node_key,
-                      )}
+                      checked={
+                        (placementCandidate?.document.id === doc.id &&
+                          placementCandidate.node.node_key === node.node_key) ||
+                        selected.some(
+                          (s) =>
+                            s.document.id === doc.id &&
+                            s.node.node_key === node.node_key,
+                        )
+                      }
                       onChange={(e) => toggle(doc, node, e.target.checked)}
                     />
                     <span>
@@ -596,7 +601,7 @@ export default function MergePage() {
                 aria-label={`Merge progress: ${mergeProgress}%`}
               >
                 <div className="merge-operation-progress-heading">
-                  <span>Generating merged document</span>
+                  <span>{mergeStage}</span>
                   <strong>{mergeProgress}%</strong>
                 </div>
                 <div
@@ -626,6 +631,16 @@ export default function MergePage() {
                   <span className="selection-status">Ready to review</span>
                 )}
               </div>
+              {selected.length > 0 && (
+                <p className="pane-help" role="note">
+                  Heading numbers are recalculated in document order, and the
+                  TOC follows the new numbers. “Same heading level” keeps the
+                  destination’s heading depth, not its existing numbers. Adding
+                  a numbered chapter before Introduction can change 1 to 2 and
+                  1.2.2 to 2.2.2. Final numbers depend on the entire insertion
+                  plan.
+                </p>
+              )}
               {!selected.length && (
                 <p className="merge-empty">
                   Select a source heading to build an ordered insertion plan.
@@ -655,6 +670,37 @@ export default function MergePage() {
                   >
                     <option value="after">After</option>
                     <option value="before">Before</option>
+                  </select>
+                  <select
+                    value={
+                      s.resolutionOptions.promote_to_top_level
+                        ? "top"
+                        : "sibling"
+                    }
+                    aria-label="Inserted section level"
+                    onChange={(e) =>
+                      setSelected((v) =>
+                        v.map((x, n) =>
+                          n === i
+                            ? {
+                                ...x,
+                                resolutionOptions: {
+                                  ...x.resolutionOptions,
+                                  promote_to_top_level:
+                                    e.target.value === "top",
+                                },
+                              }
+                            : x,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="sibling">
+                      Same heading level — renumbers
+                    </option>
+                    <option value="top">
+                      New numbered chapter — shifts later numbers
+                    </option>
                   </select>
                   <select
                     value={s.destination ?? ""}
@@ -718,6 +764,14 @@ export default function MergePage() {
                     <small>
                       Table of contents refresh required: update it in the
                       editor to recalculate entries and page numbers.
+                    </small>
+                  )}
+                  {result.toc_refresh_status === "updated_with_layout" && (
+                    <small>
+                      Table of contents page numbers were verified against the
+                      exported file using the server’s LibreOffice and fonts.
+                      Another editor or different fonts can change pagination;
+                      update the TOC there after editing.
                     </small>
                   )}
                   <button
@@ -906,14 +960,25 @@ export default function MergePage() {
               <button
                 type="button"
                 className="secondary"
-                disabled={!selected.length || checking || merging}
+                disabled={
+                  !selected.length ||
+                  !!placementCandidate ||
+                  checking ||
+                  merging
+                }
                 onClick={check}
               >
                 {checking ? "Checking…" : "Check compatibility"}
               </button>
               <button
                 type="button"
-                disabled={!master || !selected.length || checking || merging}
+                disabled={
+                  !master ||
+                  !selected.length ||
+                  !!placementCandidate ||
+                  checking ||
+                  merging
+                }
                 onClick={merge}
               >
                 {merging

@@ -12,6 +12,56 @@ declare global {
   }
 }
 
+// ONLYOFFICE's API script is large and is shared by every editor view. Keep a
+// single in-flight/completed load so navigating between anchors does not fetch
+// or execute it again.
+const editorApiLoads = new Map<string, Promise<void>>();
+
+function loadEditorApi(documentServerUrl: string) {
+  const scriptUrl = `${documentServerUrl.replace(/\/$/, "")}/web-apps/apps/api/documents/api.js`;
+  const existing = editorApiLoads.get(scriptUrl);
+  if (existing) return existing;
+
+  const promise = new Promise<void>((resolve, reject) => {
+    const current = document.querySelector<HTMLScriptElement>(
+      `script[src="${scriptUrl}"]`,
+    );
+    if (current?.dataset.loaded === "true") {
+      resolve();
+      return;
+    }
+    const script = current ?? document.createElement("script");
+    script.async = true;
+    script.src = scriptUrl;
+    script.onload = () => {
+      script.dataset.loaded = "true";
+      resolve();
+    };
+    script.onerror = () => reject(new Error("ONLYOFFICE API failed to load"));
+    if (!current) document.head.appendChild(script);
+  });
+  editorApiLoads.set(scriptUrl, promise);
+  return promise;
+}
+
+function warmEditorConnection(documentServerUrl: string) {
+  try {
+    const url = new URL(documentServerUrl, window.location.href);
+    if (
+      document.head.querySelector(
+        `link[rel="preconnect"][href="${url.origin}"]`,
+      )
+    )
+      return;
+    const link = document.createElement("link");
+    link.rel = "preconnect";
+    link.href = url.origin;
+    document.head.appendChild(link);
+  } catch {
+    // The API request below will still provide the normal error message.
+  }
+}
+
 export default function EditorPage() {
   const { documentId, versionId } = useParams<{
     documentId: string;
@@ -19,6 +69,10 @@ export default function EditorPage() {
   }>();
   const query = useSearchParams();
   const holder = useRef<HTMLDivElement>(null);
+  const tocBridge = useRef<Window | null>(null);
+  const tocPending = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const [tocReady, setTocReady] = useState(false);
+  const [tocUpdating, setTocUpdating] = useState(false);
   const sessionRef = useRef("");
   const returnAfterSaveRef = useRef(false);
   const [message, setMessage] = useState("Preparing document editor…");
@@ -63,47 +117,51 @@ export default function EditorPage() {
       setMergedDocumentName(config.document?.title || "");
       sessionId = config.session_id;
       sessionRef.current = sessionId;
-      const script = document.createElement("script");
-      script.src = `${config.documentServerUrl}/web-apps/apps/api/documents/api.js`;
-      script.onload = () => {
-        if (window.DocsAPI && holder.current) {
-          const anchor = query.get("anchor");
-          config.editorConfig = {
-            ...config.editorConfig,
-            ...(anchor
-              ? {
-                  actionLink: {
-                    action: { type: "bookmark", data: anchor },
-                  },
-                }
-              : {}),
-            customization: {
-              ...config.editorConfig.customization,
-              logo: {
-                ...config.editorConfig.customization?.logo,
-                visible: false,
+      warmEditorConnection(config.documentServerUrl);
+      loadEditorApi(config.documentServerUrl)
+        .then(() => {
+          if (window.DocsAPI && holder.current) {
+            const anchor = query.get("anchor");
+            config.editorConfig = {
+              ...config.editorConfig,
+              ...(anchor
+                ? {
+                    actionLink: {
+                      action: { type: "bookmark", data: anchor },
+                    },
+                  }
+                : {}),
+              customization: {
+                ...config.editorConfig.customization,
+                logo: {
+                  ...config.editorConfig.customization?.logo,
+                  visible: false,
+                },
               },
-            },
-          };
-          new window.DocsAPI.DocEditor("onlyoffice-editor", {
-            ...config,
-            width: "100%",
-            // ONLYOFFICE otherwise falls back to its 150px default iframe height.
-            // Give its API a concrete viewport-based height, not just CSS on its host.
-            height: `${Math.max(window.innerHeight - 122, 640)}px`,
-          });
-          setMessage(
-            anchor
-              ? "Opening the merged section bookmark in the document editor. Use Save to create a new immutable version."
-              : mode === "view"
-                ? "Read-only version view."
-                : "Use the editor Save button. IDMS will create the next immutable version automatically.",
-          );
-        }
-      };
-      script.onerror = () =>
-        setMessage("The document editor could not be loaded.");
-      document.body.appendChild(script);
+            };
+            const editor = new window.DocsAPI.DocEditor("onlyoffice-editor", {
+              ...config,
+              events: {
+                ...config.events,
+                onDocumentReady: () => {
+                  setMessage("Document ready. Use Update TOC to refresh entries and pagination before saving.");
+                },
+              },
+              width: "100%",
+              // ONLYOFFICE otherwise falls back to its 150px default iframe height.
+              // Give its API a concrete viewport-based height, not just CSS on its host.
+              height: `${Math.max(window.innerHeight - 122, 640)}px`,
+            });
+            setMessage(
+              anchor
+                ? "Opening the merged section bookmark in the document editor. Use Save to create a new immutable version."
+                : mode === "view"
+                  ? "Read-only version view."
+                  : "Use the editor Save button. IDMS will create the next immutable version automatically.",
+            );
+          }
+        })
+        .catch(() => setMessage("The document editor could not be loaded."));
       if (mode === "edit")
         timer = setInterval(async () => {
           const state = await fetch(`${api}/editor-sessions/${sessionId}`).then(
@@ -246,6 +304,45 @@ export default function EditorPage() {
     void Promise.allSettled(cleanup);
     window.location.assign(returnTo);
   }
+  useEffect(() => {
+    function receive(event: MessageEvent) {
+      const data = event.data;
+      if (event.origin !== window.location.origin || !data || data.sessionId !== sessionRef.current) return;
+      if (data.type === "idms-toc-ready" && event.source) {
+        tocBridge.current = event.source as Window;
+        setTocReady(true);
+      } else if (data.type === "idms-toc-result" && event.source === tocBridge.current && data.requestId === tocPending.current?.id) {
+        if (tocPending.current) clearTimeout(tocPending.current.timer);
+        tocPending.current = null;
+        setTocUpdating(false);
+        setMessage(data.ok === true ? "Table of contents refreshed, including titles, numbering and page numbers. Save to keep this update." : "The editor could not confirm the TOC update. No successful refresh has been recorded.");
+      }
+    }
+    window.addEventListener("message", receive);
+    return () => {
+      window.removeEventListener("message", receive);
+      if (tocPending.current) clearTimeout(tocPending.current.timer);
+      tocPending.current = null;
+      tocBridge.current = null;
+    };
+  }, []);
+  function updateTableOfContents() {
+    if (!tocBridge.current || tocPending.current) {
+      setMessage("The TOC update tool is not ready. Wait for the editor to load.");
+      return;
+    }
+    const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (value) => value.toString(16).padStart(2, "0")).join("");
+    const timer = setTimeout(() => {
+      tocPending.current = null;
+      setTocUpdating(false);
+      setMessage("TOC update timed out. Review the document and retry; refresh is not confirmed.");
+    }, 60000);
+    tocPending.current = { id, timer };
+    setTocUpdating(true);
+    setMessage("Updating table of contents…");
+    tocBridge.current.postMessage({ type: "idms-toc-update", sessionId: sessionRef.current, requestId: id }, window.location.origin);
+  }
+
   return (
     <main className="editor-shell">
       <header className="editor-page-header">
@@ -323,11 +420,29 @@ export default function EditorPage() {
               <button
                 type="button"
                 className="editor-save"
-                disabled={saving}
+                disabled={saving || tocUpdating}
                 onClick={() => void saveDocument()}
               >
                 {saving ? "Saving…" : "Save"}
               </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={updateTableOfContents}
+                disabled={!tocReady || tocUpdating || saving}
+              >
+                {tocUpdating ? "Updating TOC…" : "Update TOC"}
+              </button>
+              <a
+                className="editor-download"
+                href={`/api/v1/documents/${documentId}/versions/${versionId}/download-clean`}
+              >
+                <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3v12m-4-4 4 4 4-4" />
+                  <path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
+                </svg>
+                <span>Download clean DOCX</span>
+              </a>
             </>
           )}
           {savedVersionId && (
