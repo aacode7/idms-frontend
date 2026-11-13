@@ -27,6 +27,10 @@ services:
       - ../idms-backend/storage/objects:/data/objects
       - ../idms-backend/.local/extraction-profiles.json:/data/config/extraction-profiles.json:ro
     environment:
+      # Containers reach the database as postgres:5432. Left empty, the app stops at startup
+      # with "Missing required IDMS environment settings: DATABASE_URL".
+      DATABASE_URL: ${IDMS_LOCAL_DATABASE_URL:-}
+      IDMS_STORAGE_ROOT: /data/objects
       # The Next.js route handler reaches Uvicorn in this same container.
       IDMS_API_INTERNAL_URL: http://127.0.0.1:8000
       # ONLYOFFICE reaches the API through Next.js on the Docker network.
