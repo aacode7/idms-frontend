@@ -189,3 +189,197 @@ test("saved merge distinguishes preservation checks from pending TOC pagination"
     page.getByText(/Table of contents refresh required/),
   ).toBeVisible();
 });
+
+test("each saved merge shows its own selected insertions after reload", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    await route.fulfill({
+      json: path.endsWith("/merge-results")
+        ? [
+            {
+              generated_document_id: "result",
+              generated_version_id: "version-2",
+              generated_version_number: 2,
+              source_node_keys: ["heading-36", "heading-51"],
+              editor_anchor_ids: ["idms_merge_1", "idms_merge_2"],
+              insertions: [
+                {
+                  source_version_id: "source-v1",
+                  source_node_key: "heading-36",
+                  source_title: "Project Specific Documents",
+                  source_filename: "Source.docx",
+                  source_version_number: 1,
+                  destination_node_key: "intro",
+                  destination_title: "Introduction",
+                  position: "before",
+                  heading_mode: "same",
+                },
+                {
+                  source_version_id: "source-v1",
+                  source_node_key: "heading-51",
+                  source_title: "HIS Views and its Functionality",
+                  source_filename: "Source.docx",
+                  source_version_number: 1,
+                  destination_node_key: "engineering",
+                  destination_title: "Engineering Documents",
+                  destination_parent_title: "Reference Documents",
+                  position: "after",
+                  heading_mode: "parent",
+                },
+              ],
+            },
+            {
+              generated_document_id: "result",
+              generated_version_id: "version-1",
+              generated_version_number: 1,
+              source_node_keys: ["heading-22"],
+              editor_anchor_ids: ["idms_merge_1"],
+              insertions: [
+                {
+                  source_version_id: "older-source",
+                  source_node_key: "heading-22",
+                  source_title: "Reference Documents",
+                  source_filename: "Original.docx",
+                  source_version_number: 3,
+                  destination_node_key: "intro",
+                  destination_title: "Introduction",
+                  position: "before",
+                  heading_mode: "chapter",
+                },
+              ],
+            },
+          ]
+        : [],
+    });
+  });
+  await page.goto("/projects/project/merge");
+  for (let visit = 0; visit < 2; visit++) {
+    const newer = page
+      .locator(".merged-document-result")
+      .filter({ hasText: "Saved merge · Version 2" });
+    const older = page
+      .locator(".merged-document-result")
+      .filter({ hasText: "Saved merge · Version 1" });
+    await expect(
+      newer.getByRole("heading", { name: "Selected insertions" }),
+    ).toBeVisible();
+    await expect(newer.locator("li")).toHaveCount(2);
+    await expect(newer).toContainText("Project Specific Documents");
+    await expect(newer).toContainText(
+      "Before Introduction · Same heading level",
+    );
+    await expect(newer).toContainText(
+      "After Reference Documents · Same level as immediate parent",
+    );
+    await expect(newer).toContainText("Source.docx · Version 1");
+    await expect(older.locator("li")).toHaveCount(1);
+    await expect(older).toContainText("Reference Documents");
+    await expect(older).toContainText(
+      "Before Introduction · New numbered chapter",
+    );
+    await expect(older).not.toContainText("Project Specific Documents");
+    await expect(
+      newer.getByRole("link", { name: /Open saved merge/ }),
+    ).toHaveAttribute("href", /version-2/);
+    await expect(
+      older.getByRole("link", { name: /Open saved merge/ }),
+    ).toHaveAttribute("href", /version-1/);
+    if (visit === 0) await page.reload();
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator(".saved-insertions").first()).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("saved summaries retain their version's parent-child trees after reload", async ({
+  page,
+}) => {
+  const section = (
+    node_key: string,
+    title: string,
+    level: number,
+    parent_node_key: string | null,
+  ) => ({ node_key, title, level, parent_node_key, content: "section" });
+  const result = (version: number, sections: ReturnType<typeof section>[]) => ({
+    generated_document_id: "result",
+    generated_version_id: `version-${version}`,
+    generated_version_number: version,
+    source_node_keys: [sections[0].node_key],
+    editor_anchor_ids: ["anchor"],
+    insertions: [
+      {
+        source_version_id: `source-v${version}`,
+        source_node_key: sections[0].node_key,
+        source_title: sections[0].title,
+        source_filename: "Source.docx",
+        source_version_number: version,
+        destination_node_key: "target",
+        destination_title: "Engineering Documents",
+        position: "after",
+        heading_mode: "same",
+        included_sections: sections,
+        excluded_sections: version === 2 ? ["Generic Documents"] : [],
+      },
+    ],
+  });
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    await route.fulfill({
+      json: path.endsWith("/merge-results")
+        ? [
+            result(2, [
+              section("root", "Reference Documents", 1, null),
+              section("child", "Project Specific Documents", 2, "root"),
+              section("grandchild", "Specifications", 3, "child"),
+            ]),
+            result(1, [
+              section("child", "Project Specific Documents", 2, "root"),
+            ]),
+          ]
+        : [],
+    });
+  });
+  await page.goto("/projects/project/merge");
+  for (let visit = 0; visit < 2; visit++) {
+    const newer = page
+      .locator(".merged-document-result")
+      .filter({ hasText: "Saved merge · Version 2" });
+    const older = page
+      .locator(".merged-document-result")
+      .filter({ hasText: "Saved merge · Version 1" });
+    const tree = newer.getByRole("list", {
+      name: "Included section hierarchy",
+      exact: true,
+    });
+    await expect(tree).toBeVisible();
+    await expect(tree.locator(":scope > li")).toHaveCount(1);
+    await expect(
+      tree.locator(
+        'li[data-node-key="root"] > ul > li[data-node-key="child"] > ul > li[data-node-key="grandchild"]',
+      ),
+    ).toBeVisible();
+    await expect(tree).not.toContainText("Generic Documents");
+    await expect(newer).toContainText("Excluded: Generic Documents");
+    const oldTree = older.getByRole("list", {
+      name: "Included section hierarchy",
+      exact: true,
+    });
+    await expect(
+      oldTree.locator(':scope > li[data-node-key="child"]'),
+    ).toBeVisible();
+    await expect(oldTree).not.toContainText("Reference Documents");
+    if (!visit) await page.reload();
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});

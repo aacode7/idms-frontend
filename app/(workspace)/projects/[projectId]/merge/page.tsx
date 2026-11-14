@@ -1,12 +1,5 @@
 "use client";
-import {
-  DragEvent,
-  MouseEvent,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   createMergeJob,
@@ -23,10 +16,22 @@ import type {
   MergePreview,
   MergeResult,
   OutlineNode,
+  SourceSectionChoice,
 } from "../../../../../types/contracts";
+import { SourceSectionRow } from "../../../../../components/merge/source-section-row";
+import { SectionHierarchy } from "../../../../../components/merge/section-hierarchy";
+import {
+  branchNodes,
+  wholeBranch,
+  changeContent,
+  selectionContext,
+  splitSelection,
+  type ContentScope,
+} from "../../../../../lib/source-selection";
 type Selection = {
   document: Document;
   node: OutlineNode;
+  includedSections: SourceSectionChoice[];
   destination: string | null;
   position: "before" | "after";
   resolutionOptions: {
@@ -43,6 +48,10 @@ type Selection = {
     normalise_tables: boolean;
   };
 };
+type ContentCandidate = Pick<
+  Selection,
+  "document" | "node" | "includedSections"
+> & { overrideKeys?: string[] };
 
 const defaultResolutionOptions: Selection["resolutionOptions"] = {
   inherit_heading_format: true,
@@ -86,14 +95,9 @@ export default function MergePage() {
     [deletingMergeDocumentId, setDeletingMergeDocumentId] = useState<
       string | null
     >(null),
-    [placementCandidate, setPlacementCandidate] = useState<Pick<
-      Selection,
-      "document" | "node"
-    > | null>(null),
-    [dragged, setDragged] = useState<Pick<
-      Selection,
-      "document" | "node"
-    > | null>(null),
+    [placementCandidate, setPlacementCandidate] =
+      useState<ContentCandidate | null>(null),
+    [dragged, setDragged] = useState<ContentCandidate | null>(null),
     [dropTarget, setDropTarget] = useState<string | null>(null);
   const deletingMergeRef = useRef<string | null>(null);
   const master = useMemo(() => docs.find((d) => d.role === "master"), [docs]);
@@ -151,63 +155,213 @@ export default function MergePage() {
     }
     setOpen((v) => (v === doc.id ? null : doc.id));
   }
-  function toggle(document: Document, node: OutlineNode, checked: boolean) {
-    setPreview(null);
-    if (checked) {
-      chooseForPlacement(document, node);
-      return;
-    }
-    setSelected((items) =>
-      items.filter(
-        (item) =>
-          !(
-            item.document.id === document.id &&
-            item.node.node_key === node.node_key
-          ),
-      ),
+  function removeChoices(
+    items: Selection[],
+    document: Document,
+    keys: Set<string>,
+  ) {
+    const nodes = outlines[document.id] ?? [];
+    return items.flatMap((item) =>
+      item.document.id !== document.id
+        ? [item]
+        : splitSelection(
+            nodes,
+            item.node,
+            item.includedSections.filter(
+              (choice) => !keys.has(choice.node_key),
+            ),
+          ).map((part) => ({ ...item, ...part })),
     );
-    setPlacementCandidate((candidate) =>
-      candidate?.document.id === document.id &&
-      candidate.node.node_key === node.node_key
-        ? null
-        : candidate,
-    );
-    setMessage(`“${outlineTitle(node)}” was deselected.`);
   }
-
+  function toggle(document: Document, node: OutlineNode, checked: boolean) {
+    setSourceScope(document, node, checked ? "subtree" : "omit");
+  }
+  function setSourceScope(
+    document: Document,
+    node: OutlineNode,
+    scope: ContentScope,
+  ) {
+    setPreview(null);
+    const nodes = outlines[document.id] ?? [];
+    const contains = (outer: OutlineNode, inner: OutlineNode) =>
+      outer.block_index <= inner.block_index &&
+      outer.end_block_index >= inner.end_block_index;
+    const keys = new Set(
+      scope === "omit"
+        ? [node.node_key]
+        : branchNodes(nodes, node).map((n) => n.node_key),
+    );
+    const owners = selected.filter(
+      (s) => s.document.id === document.id && contains(s.node, node),
+    );
+    const owner =
+      owners.find((s) =>
+        s.includedSections.some((c) => c.node_key === node.node_key),
+      ) ?? owners.sort((a, b) => b.node.block_index - a.node.block_index)[0];
+    const pending =
+      placementCandidate?.document.id === document.id
+        ? placementCandidate
+        : null;
+    if (
+      pending &&
+      (contains(pending.node, node) || contains(node, pending.node) || !owner)
+    ) {
+      const context = selectionContext(nodes, pending.node, node);
+      const includedSections = changeContent(
+        nodes,
+        context,
+        pending.includedSections,
+        node,
+        scope,
+      );
+      const overrideKeys = [
+        ...new Set([
+          ...(pending.overrideKeys ??
+            branchNodes(nodes, pending.node).map((n) => n.node_key)),
+          ...keys,
+        ]),
+      ];
+      setPlacementCandidate(
+        includedSections.length
+          ? { document, node: context, includedSections, overrideKeys }
+          : null,
+      );
+      if (!includedSections.length)
+        setSelected((items) =>
+          removeChoices(items, document, new Set(overrideKeys)),
+        );
+    } else if (owner) {
+      const choices = changeContent(
+        nodes,
+        owner.node,
+        owner.includedSections,
+        node,
+        scope,
+      );
+      setSelected((items) =>
+        items.flatMap((item) => {
+          if (item.document.id !== document.id) return [item];
+          const included =
+            item === owner
+              ? choices
+              : item.includedSections.filter((c) => !keys.has(c.node_key));
+          return splitSelection(nodes, item.node, included).map((part) => ({
+            ...item,
+            ...part,
+          }));
+        }),
+      );
+    } else if (scope === "exclude" || scope === "omit") {
+      setSelected((items) => removeChoices(items, document, keys));
+    } else {
+      setPlacementCandidate({
+        document,
+        node,
+        includedSections: changeContent(nodes, node, [], node, scope),
+        overrideKeys: [...keys],
+      });
+    }
+    setMessage(
+      scope === "omit"
+        ? `Excluded “${outlineTitle(node)}”; checked children stay included.`
+        : scope === "exclude"
+          ? `Excluded “${outlineTitle(node)}” and its descendants.`
+          : `Content selection updated for “${outlineTitle(node)}”. Place any pending selection in the master.`,
+    );
+  }
   function upsertSelection(
-    candidate: Pick<Selection, "document" | "node">,
+    candidate: ContentCandidate,
     destination: string | null,
     position: "before" | "after",
   ) {
     setPreview(null);
+    const nodes = outlines[candidate.document.id] ?? [];
+    const keys = new Set(
+      candidate.overrideKeys ??
+        branchNodes(nodes, candidate.node).map((n) => n.node_key),
+    );
     setSelected((items) => {
       const existing = items.find(
         (item) =>
           item.document.id === candidate.document.id &&
           item.node.node_key === candidate.node.node_key,
       );
-      const next = {
-        ...candidate,
+      const owner =
+        existing ??
+        items.find(
+          (item) =>
+            item.document.id === candidate.document.id &&
+            item.includedSections.some((c) =>
+              candidate.includedSections.some(
+                (choice) => choice.node_key === c.node_key,
+              ),
+            ),
+        );
+      const additions = splitSelection(
+        nodes,
+        candidate.node,
+        candidate.includedSections,
+      ).map((part) => ({
+        document: candidate.document,
+        ...part,
         destination,
         position,
-        resolutionOptions:
-          existing?.resolutionOptions ?? defaultResolutionOptions,
-      };
-      return existing
-        ? items.map((item) => (item === existing ? next : item))
-        : [...items, next];
+        resolutionOptions: owner?.resolutionOptions ?? defaultResolutionOptions,
+      }));
+      if (existing)
+        return items.flatMap((item) =>
+          item === existing
+            ? additions
+            : removeChoices([item], candidate.document, keys),
+        );
+      return [...removeChoices(items, candidate.document, keys), ...additions];
     });
     setPlacementCandidate(null);
     setMessage(
-      `Planned “${outlineTitle(candidate.node)}” ${position} the selected master heading.`,
+      `Placed ${candidate.includedSections.length} included section(s) ${position} the selected master heading.`,
     );
   }
+  function candidateFor(
+    document: Document,
+    node: OutlineNode,
+  ): ContentCandidate {
+    const nodes = outlines[document.id] ?? [];
+    const keys = new Set(branchNodes(nodes, node).map((n) => n.node_key));
+    const included = visibleChoices(document).filter((choice) =>
+      keys.has(choice.node_key),
+    );
+    return {
+      document,
+      node,
+      includedSections: included.length ? included : wholeBranch(nodes, node),
+      overrideKeys: [...keys],
+    };
+  }
+  function visibleChoices(document: Document) {
+    const nodes = outlines[document.id] ?? [];
+    const pending =
+      placementCandidate?.document.id === document.id
+        ? placementCandidate
+        : null;
+    const overridden = new Set(
+      pending
+        ? (pending.overrideKeys ??
+            branchNodes(nodes, pending.node).map((n) => n.node_key))
+        : [],
+    );
+    return [
+      ...selected
+        .filter((s) => s.document.id === document.id)
+        .flatMap((s) => s.includedSections)
+        .filter((c) => !overridden.has(c.node_key)),
+      ...(pending?.includedSections ?? []),
+    ];
+  }
   function chooseForPlacement(document: Document, node: OutlineNode) {
-    const candidate = { document, node };
+    const candidate = candidateFor(document, node);
     setPlacementCandidate(candidate);
     setMessage(
-      `“${outlineTitle(node)}” is selected. Click a master heading to place it after that heading, or drag it to a gap.`,
+      `${candidate.includedSections.length} checked section(s) ready. Click a master heading to place them after it, or drag them to a gap.`,
     );
   }
   function placeCandidate(
@@ -218,6 +372,10 @@ export default function MergePage() {
       upsertSelection(placementCandidate, destination, position);
   }
   function startDrag(event: DragEvent, document: Document, node: OutlineNode) {
+    if (merging) {
+      event.preventDefault();
+      return;
+    }
     event.dataTransfer.effectAllowed = "move";
     // The browser drag payload is the source of truth at drop time. React state
     // updates from dragstart are asynchronous, so relying on `dragged` alone
@@ -227,17 +385,22 @@ export default function MergePage() {
       JSON.stringify({ documentId: document.id, nodeKey: node.node_key }),
     );
     event.dataTransfer.setData("text/plain", `${document.id}:${node.node_key}`);
-    const candidate = { document, node };
+    const candidate = candidateFor(document, node);
     setDragged(candidate);
     setPlacementCandidate(candidate);
     setMessage(
-      `Drag “${outlineTitle(node)}” to a labelled master gap. The gap label is the exact insertion point.`,
+      `Drag ${candidate.includedSections.length} checked section(s) to a labelled master gap. The gap label is the exact insertion point.`,
     );
   }
   function allowDrop(event: DragEvent, target: string) {
+    if (merging) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     setDropTarget(target);
+  }
+  function leaveDrop(event: DragEvent) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+      setDropTarget(null);
   }
   function candidateFromDrag(event: DragEvent) {
     try {
@@ -253,7 +416,9 @@ export default function MergePage() {
         const node = document
           ? outlines[document.id]?.find((item) => item.node_key === nodeKey)
           : undefined;
-        if (document && node) return { document, node };
+        if (document && node) {
+          return candidateFor(document, node);
+        }
       }
     } catch {
       // Fall back to the current drag state for browsers that do not retain a
@@ -268,6 +433,7 @@ export default function MergePage() {
   ) {
     event.preventDefault();
     event.stopPropagation();
+    if (merging) return;
     const candidate = candidateFromDrag(event);
     if (candidate) {
       upsertSelection(candidate, destination, position);
@@ -275,7 +441,7 @@ export default function MergePage() {
         ? masterOutline.find((node) => node.node_key === destination)?.title
         : "the start of the document";
       setMessage(
-        `Planned “${outlineTitle(candidate.node)}” ${position} “${destinationTitle}”.`,
+        `Planned ${candidate.includedSections.length} checked section(s) ${position} “${destinationTitle}”.`,
       );
     } else {
       setMessage(
@@ -289,6 +455,7 @@ export default function MergePage() {
     selected.map((s, sort_order) => ({
       source_version_id: s.document.version_id,
       source_node_key: s.node.node_key,
+      included_sections: s.includedSections,
       destination_node_key: s.destination,
       position: s.position,
       sort_order,
@@ -409,11 +576,13 @@ export default function MergePage() {
             setMergeProgress(0);
             setMerging(false);
             setMessage(
-              status.error_code === "merge_validation_failed"
-                ? "Merge stopped because document preservation checks failed. No new version was saved."
-                : status.error_code === "merge_plan_invalid"
-                  ? "The saved merge plan could not be verified. Review your selections and submit a new merge."
-                  : "Merge failed. Review your selections and try again.",
+              status.error_code === "merge_toc_refresh_failed"
+                ? "Merge stopped while updating the table of contents and verifying its page numbers. No new version was saved."
+                : status.error_code === "merge_validation_failed"
+                  ? "Merge stopped because document validation checks failed. No new version was saved."
+                  : status.error_code === "merge_plan_invalid"
+                    ? "The saved merge plan could not be verified. Review your selections and submit a new merge."
+                    : "Merge failed. Review your selections and try again.",
             );
           }
         } catch {
@@ -512,8 +681,23 @@ export default function MergePage() {
             <span className="pane-count">{sources.length}</span>
           </div>
           <p className="pane-hint">
-            Select a heading, then place it in the master map.
+            Selected sections include their headings and content. Child sections
+            are included by default; uncheck unwanted branches or choose no
+            child sections. Then place the selection in the master.
           </p>
+          {placementCandidate && (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setPlacementCandidate(null);
+                setDragged(null);
+                setPreview(null);
+              }}
+            >
+              Cancel pending placement
+            </button>
+          )}
           {!sources.length && (
             <p className="merge-empty">
               No source documents are available. Return to the workspace to add
@@ -531,43 +715,28 @@ export default function MergePage() {
               </button>
               {open === doc.id &&
                 outlines[doc.id]?.map((node) => (
-                  <label
-                    className={`source-node ${placementCandidate?.document.id === doc.id && placementCandidate.node.node_key === node.node_key ? "placement-active" : ""}`}
+                  <SourceSectionRow
                     key={node.node_key}
-                    style={{ paddingLeft: 12 + (node.level - 1) * 14 }}
-                    draggable
+                    node={node}
+                    nodes={outlines[doc.id] ?? []}
+                    choices={visibleChoices(doc)}
+                    title={outlineTitle(node)}
+                    active={
+                      placementCandidate?.document.id === doc.id &&
+                      placementCandidate.includedSections.some(
+                        (choice) => choice.node_key === node.node_key,
+                      )
+                    }
+                    disabled={merging}
+                    onToggle={(checked) => toggle(doc, node, checked)}
+                    onScope={(scope) => setSourceScope(doc, node, scope)}
+                    onChoose={() => chooseForPlacement(doc, node)}
                     onDragStart={(event) => startDrag(event, doc, node)}
                     onDragEnd={() => {
                       setDragged(null);
                       setDropTarget(null);
                     }}
-                    onDoubleClick={(event: MouseEvent) => {
-                      if ((event.target as HTMLElement).tagName !== "INPUT")
-                        chooseForPlacement(doc, node);
-                    }}
-                    title="Double-click to select and place, or drag to a master gap"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={
-                        (placementCandidate?.document.id === doc.id &&
-                          placementCandidate.node.node_key === node.node_key) ||
-                        selected.some(
-                          (s) =>
-                            s.document.id === doc.id &&
-                            s.node.node_key === node.node_key,
-                        )
-                      }
-                      onChange={(e) => toggle(doc, node, e.target.checked)}
-                    />
-                    <span>
-                      <strong>{outlineTitle(node)}</strong>
-                      <small>
-                        Heading {node.level} · blocks {node.block_index + 1}–
-                        {node.end_block_index + 1}
-                      </small>
-                    </span>
-                  </label>
+                  />
                 ))}
             </section>
           ))}
@@ -577,7 +746,10 @@ export default function MergePage() {
             <div>
               <p className="eyebrow">MASTER DOCUMENT MAP</p>
               <h2>{master?.filename ?? "No master selected"}</h2>
-              <p>Parsed headings; master layout remains authoritative.</p>
+              <p>
+                Drop a source section onto a heading to insert after it, or use
+                a labelled gap to choose the insertion point.
+              </p>
             </div>
             <span>{masterOutline.length} sections</span>
           </div>
@@ -601,15 +773,20 @@ export default function MergePage() {
                     onDragOver={(event) =>
                       allowDrop(event, `before:${node.node_key}`)
                     }
-                    onDragLeave={() => setDropTarget(null)}
+                    onDragLeave={leaveDrop}
                     onDrop={(event) => dropOn(event, node.node_key, "before")}
                   >
                     Drop before {outlineTitle(node)}
                   </div>
                 )}
                 <div
-                  className={`master-node ${placementCandidate ? "master-node-selectable" : ""}`}
+                  className={`master-node ${placementCandidate ? "master-node-selectable" : ""} ${dropTarget === `after:${node.node_key}` ? "is-drop-target" : ""}`}
                   style={{ marginLeft: (node.level - 1) * 16 }}
+                  onDragOver={(event) =>
+                    allowDrop(event, `after:${node.node_key}`)
+                  }
+                  onDragLeave={leaveDrop}
+                  onDrop={(event) => dropOn(event, node.node_key, "after")}
                   onClick={() => placeCandidate(node.node_key, "after")}
                   title={
                     placementCandidate
@@ -637,7 +814,7 @@ export default function MergePage() {
                   onDragOver={(event) =>
                     allowDrop(event, `after:${node.node_key}`)
                   }
-                  onDragLeave={() => setDropTarget(null)}
+                  onDragLeave={leaveDrop}
                   onDrop={(event) => dropOn(event, node.node_key, "after")}
                 >
                   Drop after {outlineTitle(node)}
@@ -706,6 +883,48 @@ export default function MergePage() {
                   <div>
                     <strong>{outlineTitle(s.node)}</strong>
                     <small>{s.document.filename}</small>
+                    <details className="selection-content" open>
+                      <summary>
+                        {s.includedSections.length} included section
+                        {s.includedSections.length === 1 ? "" : "s"} · Review
+                        content
+                      </summary>
+                      <SectionHierarchy
+                        sections={s.includedSections.map((choice) => {
+                          const node = outlines[s.document.id]?.find(
+                            (n) => n.node_key === choice.node_key,
+                          );
+                          return {
+                            ...choice,
+                            title: node?.title,
+                            level: node?.level,
+                            parent_node_key: node?.parent_node_key,
+                          };
+                        })}
+                      />
+                      {branchNodes(
+                        outlines[s.document.id] ?? [],
+                        s.node,
+                      ).filter(
+                        (n) =>
+                          !s.includedSections.some(
+                            (c) => c.node_key === n.node_key,
+                          ),
+                      ).length > 0 && (
+                        <small>
+                          Excluded:{" "}
+                          {branchNodes(outlines[s.document.id] ?? [], s.node)
+                            .filter(
+                              (n) =>
+                                !s.includedSections.some(
+                                  (c) => c.node_key === n.node_key,
+                                ),
+                            )
+                            .map((n) => n.title)
+                            .join("; ")}
+                        </small>
+                      )}
+                    </details>
                     {parentLevelError(s) && (
                       <small className="plan-level-error" role="alert">
                         {parentLevelError(s)}
@@ -792,12 +1011,76 @@ export default function MergePage() {
                   className="merged-document-result"
                   key={`${result.generated_document_id}:${result.generated_version_id}`}
                 >
+                  {result.generated_version_number != null && (
+                    <strong>
+                      Saved merge · Version {result.generated_version_number}
+                    </strong>
+                  )}
                   <a
                     className="editor-link"
                     href={`/documents/${result.generated_document_id}/versions/${result.generated_version_id}/edit?mode=edit&expected=${result.generated_version_id}&anchor=${encodeURIComponent(result.editor_anchor_ids[0] ?? "")}&anchors=${encodeURIComponent(result.editor_anchor_ids.join(","))}&initialMerge=1&returnTo=${encodeURIComponent(`/projects/${projectId}/merge`)}`}
                   >
                     Open saved merge in document editor →
                   </a>
+                  <div className="saved-insertions">
+                    <h3>Selected insertions</h3>
+                    {result.insertions?.length ? (
+                      <ol>
+                        {result.insertions.map((insertion, index) => (
+                          <li
+                            key={`${insertion.source_version_id}:${insertion.source_node_key}:${index}`}
+                          >
+                            <strong>
+                              {insertion.source_title ??
+                                "Section details unavailable"}
+                            </strong>
+                            {insertion.included_sections && (
+                              <details className="selection-content" open>
+                                <summary>
+                                  {insertion.included_sections.length} included
+                                  section
+                                  {insertion.included_sections.length === 1
+                                    ? ""
+                                    : "s"}
+                                </summary>
+                                <SectionHierarchy
+                                  sections={insertion.included_sections}
+                                />
+                                {!!insertion.excluded_sections?.length && (
+                                  <small>
+                                    Excluded:{" "}
+                                    {insertion.excluded_sections.join("; ")}
+                                  </small>
+                                )}
+                              </details>
+                            )}
+                            {insertion.source_filename && (
+                              <small>
+                                {insertion.source_filename}
+                                {insertion.source_version_number != null &&
+                                  ` · Version ${insertion.source_version_number}`}
+                              </small>
+                            )}
+                            <span>
+                              {insertion.destination_node_key
+                                ? `${insertion.position === "before" ? "Before" : "After"} ${insertion.heading_mode === "parent" ? (insertion.destination_parent_title ?? "the immediate parent") : (insertion.destination_title ?? "the saved destination")}`
+                                : "At end of document"}
+                              {" · "}
+                              {insertion.heading_mode === "chapter"
+                                ? "New numbered chapter"
+                                : insertion.heading_mode === "parent"
+                                  ? "Same level as immediate parent"
+                                  : "Same heading level"}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <small>
+                        Insertion details are unavailable for this older merge.
+                      </small>
+                    )}
+                  </div>
                   <small>
                     {result.editor_anchor_ids.length} inserted section
                     {result.editor_anchor_ids.length === 1 ? "" : "s"}; use the

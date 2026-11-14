@@ -1042,7 +1042,9 @@ small {
   line-height: 1.2;
   text-decoration: none;
   white-space: nowrap;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
 .editor-download:hover {
   border-color: #729bd2;
@@ -1333,6 +1335,44 @@ small {
 .start-another-merge {
   margin-top: 10px;
 }
+.merged-document-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px 0;
+}
+.merged-document-result + .merged-document-result {
+  border-top: 1px solid var(--line);
+}
+.saved-insertions {
+  align-self: stretch;
+  background: #f7f9fc;
+  border: 1px solid #e0e8f0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  overflow-wrap: anywhere;
+}
+.saved-insertions h3 {
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+}
+.saved-insertions ol {
+  margin: 0;
+  padding-left: 22px;
+}
+.saved-insertions > ol > li + li {
+  margin-top: 14px;
+}
+.saved-insertions > ol > li > * {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+}
+.saved-insertions small,
+.saved-insertions span {
+  color: #526d87;
+}
 .merge-actions {
   display: flex;
   justify-content: flex-end;
@@ -1379,7 +1419,7 @@ small {
   }
 }
 
-/* Merge placement: source headings can be double-clicked or dragged into a master gap. */
+/* Drag source sections onto master headings or labelled insertion gaps. */
 .source-node {
   cursor: grab;
 }
@@ -1389,6 +1429,89 @@ small {
 .source-node.placement-active {
   background: #e8f8f6;
   box-shadow: inset 3px 0 #0faeaa;
+}
+.source-node,
+.source-node:active {
+  flex-direction: column;
+  align-items: stretch;
+  border-top: 1px solid #e0e8f0;
+}
+.source-choice-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.source-choice-heading label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.source-choice-heading span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  cursor: grab;
+  user-select: none;
+}
+.source-choice-heading .source-place {
+  flex: none;
+  padding: 4px 8px;
+  min-height: 30px;
+  font-size: 0.72rem;
+  cursor: grab;
+  background: #eef4fa;
+  color: #173653;
+  box-shadow: none;
+}
+.source-node select {
+  width: 100%;
+  min-width: 0;
+  font-size: 0.75rem;
+  padding: 7px;
+}
+.selection-content {
+  margin-top: 6px;
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+.selection-content summary {
+  cursor: pointer;
+  color: #254e78;
+}
+.selection-content .section-hierarchy {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0;
+}
+.section-hierarchy ul {
+  list-style: none;
+  margin: 7px 0 0 7px;
+  padding-left: 16px;
+  border-left: 2px solid #d6e3ef;
+}
+.section-hierarchy li + li {
+  margin-top: 9px;
+}
+.section-hierarchy-node {
+  min-width: 0;
+}
+.section-hierarchy .section-hierarchy-title {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #173653;
+  overflow-wrap: anywhere;
+}
+.section-hierarchy > li > .section-hierarchy-node > .section-hierarchy-title {
+  font-weight: 700;
+}
+.section-hierarchy .section-hierarchy-node > small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  color: #7489a0;
 }
 .master-node-selectable {
   cursor: pointer;

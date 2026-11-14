@@ -74,9 +74,35 @@ export type Diagnostic = {
   merge_effect: string | null;
 };
 export type MergePreview = { warnings: string[]; diagnostics: Diagnostic[] };
+export type SourceSectionChoice = {
+  node_key: string;
+  content: "section" | "heading";
+};
+
 export type MergeResult = {
   generated_version_id: string;
   generated_document_id: string;
+  generated_version_number?: number;
+  insertions?: {
+    source_version_id: string;
+    source_node_key: string;
+    source_title?: string | null;
+    source_filename?: string | null;
+    source_version_number?: number | null;
+    destination_node_key?: string | null;
+    destination_title?: string | null;
+    destination_parent_title?: string | null;
+    position: "before" | "after";
+    heading_mode: "same" | "chapter" | "parent";
+    included_sections?:
+      | (SourceSectionChoice & {
+          title?: string | null;
+          level?: number | null;
+          parent_node_key?: string | null;
+        })[]
+      | null;
+    excluded_sections?: string[];
+  }[];
   source_node_keys: string[];
   editor_anchor_ids: string[];
   preservation_status?: string;

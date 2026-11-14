@@ -165,6 +165,7 @@ export const createMergeJob = (
   operations: Array<{
     source_version_id: string;
     source_node_key: string;
+    included_sections?: import("../../types/contracts").SourceSectionChoice[];
     destination_node_key: string | null;
     position: "before" | "after";
     sort_order: number;
@@ -196,6 +197,7 @@ export const previewMerge = (
   operations: Array<{
     source_version_id: string;
     source_node_key: string;
+    included_sections?: import("../../types/contracts").SourceSectionChoice[];
     destination_node_key: string | null;
     position: "before" | "after";
     sort_order: number;
