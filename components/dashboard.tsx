@@ -8,6 +8,7 @@ import {
   listProjects,
 } from "../lib/api/projects";
 import type { Project } from "../types/contracts";
+import { DocumentMergesList } from "./document-merges-list";
 
 export function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -128,6 +129,7 @@ export function Dashboard() {
           Document intelligence workspace
         </div>
         <div className="dashboard-topbar-actions">
+          <a className="merge-primary-link" href="/document-merges/new">Merge documents</a>
           <button type="button" className="topbar-icon" aria-label="Help">
             ?
           </button>
@@ -289,6 +291,7 @@ export function Dashboard() {
           ))}
         </div>
       </section>
+      <DocumentMergesList />
       {projectToDelete && (
         <div className="delete-backdrop" role="presentation">
           <section

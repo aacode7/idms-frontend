@@ -2387,3 +2387,41 @@ small {
     grid-template-columns: 1fr;
   }
 }
+/* Whole-document merges have their own workflow and reuse the studio palette. */
+.merge-primary-link, .merge-download-link { display: inline-flex; align-items: center; justify-content: center; padding: 12px 18px; border-radius: 9px; font-weight: 700; text-decoration: none; }
+.merge-primary-link { background: #0baead; color: #082b3d; }
+.merge-primary-link:hover { background: #0bc1bd; }
+.merge-download-link { border: 1px solid #cbd8e9; color: #16385b; background: #fff; }
+.document-merge-shell { padding-top: 32px; padding-bottom: 64px; }
+.document-merge-nav { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+.merge-back-link { display: inline-block; margin-bottom: 24px; color: #31547a; text-decoration: none; }
+.document-merge-card { max-width: 880px; margin: 0 auto; padding: 36px; }
+.document-merge-card h1 { font-size: clamp(28px, 4vw, 42px); line-height: 1.15; margin: 12px 0 20px; overflow-wrap: anywhere; }
+.document-merge-card > p { line-height: 1.65; }
+.document-merge-form { display: grid; gap: 16px; margin-top: 26px; }
+.document-merge-form input { width: 100%; padding: 14px; border: 1px solid #cbd8e9; border-radius: 9px; }
+.document-merge-form button { justify-self: start; }
+.document-merge-inputs { list-style: none; padding: 0; margin: 24px 0; display: grid; gap: 14px; }
+.document-merge-inputs li { display: flex; gap: 16px; align-items: center; padding: 18px; border: 1px solid #dce5f0; border-radius: 12px; }
+.document-merge-inputs li > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.document-merge-inputs small { display: block; margin-top: 6px; color: #6b83a3; }
+.merge-order { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #e3f7f7; color: #006c79; flex-shrink: 0; }
+.document-merge-upload { display: grid; gap: 10px; border: 1px dashed #9db4ce; padding: 28px; border-radius: 12px; margin: 24px 0; }
+.document-merge-upload span { color: #6b83a3; }
+.document-merge-upload input { max-width: 100%; }
+.document-merge-actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 24px; }
+.merge-status { font-weight: 700; color: #006e7c; }
+.document-merge-progress { margin-top: 24px; padding: 20px; background: #f5fafb; border: 1px solid #dce5f0; border-radius: 12px; }
+.document-merge-progress-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.document-merge-progress-heading span { color: #536e8c; }
+.document-merge-progress progress { display: block; width: 100%; height: 12px; border: 0; border-radius: 8px; overflow: hidden; background: #dce5f0; accent-color: #0aadaa; }
+.document-merge-progress progress::-webkit-progress-bar { background: #dce5f0; border-radius: 8px; }
+.document-merge-progress progress::-webkit-progress-value { background: #0aadaa; border-radius: 8px; }
+.document-merge-progress progress::-moz-progress-bar { background: #0aadaa; border-radius: 8px; }
+.document-merge-progress-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 14px; list-style: none; padding: 0; margin: 18px 0 0; }
+.document-merge-progress-steps li { display: flex; align-items: center; gap: 8px; color: #536e8c; font-size: 13px; }
+.document-merge-progress-steps li > span { display: inline-grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; border: 1px solid #b9cbd9; border-radius: 50%; }
+.document-merge-progress-steps li[data-complete="true"] { color: #006e7c; }
+.document-merge-progress-steps li[data-complete="true"] > span { background: #d9f2ef; border-color: #0aadaa; }
+.document-merge-progress-steps li[aria-current="step"] { font-weight: 700; color: #163a5d; }
+@media (max-width: 640px) { .document-merge-card { padding: 22px; } .dashboard-topbar-center { display: none; } .document-merge-inputs li { flex-wrap: wrap; } .dashboard-topbar-actions .merge-primary-link { font-size: 13px; padding: 9px 12px; } }
