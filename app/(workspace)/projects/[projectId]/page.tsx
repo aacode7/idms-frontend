@@ -228,15 +228,24 @@ export default function ProjectWorkspacePage() {
   const compositionDocuments = documents.filter(
     (document) => document.role === "master" || document.role === "source",
   );
+  // Merging reads only the analysis outline; deep extraction keeps running in the background.
   const allDocumentsAnalyzed =
     compositionDocuments.length > 0 &&
     compositionDocuments.every(
-      (document) =>
-        document.analysis_status === "completed" &&
-        !["queued", "running", "retry_wait", "failed"].includes(
-          document.extraction_status ?? "",
-        ),
+      (document) => document.analysis_status === "completed",
     );
+  // Deep extraction never blocks merging, but its state stays visible.
+  const extractionNote = compositionDocuments.some(
+    (document) => document.extraction_status === "failed",
+  )
+    ? " Deep extraction failed for at least one document; merging does not need it."
+    : compositionDocuments.some((document) =>
+          ["queued", "running", "retry_wait"].includes(
+            document.extraction_status ?? "",
+          ),
+        )
+      ? " Deep extraction is still running in the background; merging does not need it."
+      : "";
   const analysisLabel = (document: Document) => {
     if (document.extraction_status === "queued")
       return "Deep extraction queued…";
@@ -419,7 +428,7 @@ export default function ProjectWorkspacePage() {
           <p className="muted">
             {master
               ? allDocumentsAnalyzed
-                ? "All documents are analyzed and ready to compose."
+                ? `All documents are analyzed and ready to compose.${extractionNote}`
                 : `${master.filename} is the current master. Document analysis is still in progress.`
               : "Upload your documents first, then select any one as the master."}
           </p>
