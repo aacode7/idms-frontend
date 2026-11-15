@@ -62,6 +62,52 @@ function warmEditorConnection(documentServerUrl: string) {
   }
 }
 
+type FieldPolicy = {
+  count: number;
+  skipped: { text: string; reason: string }[];
+};
+
+const SKIP_REASONS: Record<string, string> = {
+  in_field_result: "inside a field such as the table of contents",
+  in_hyperlink: "inside a hyperlink",
+  in_content_control: "inside an existing form field",
+  in_tracked_change: "inside a tracked change",
+  in_text_box: "inside a text box",
+  unsupported_structure: "mixed with other content",
+};
+
+function FieldNotice({ fields }: { fields: FieldPolicy }) {
+  if (fields.count === 0)
+    return (
+      <p className="muted editor-fields">
+        This document has no &lt; &gt; fields, so it opens read-only.
+      </p>
+    );
+  return (
+    <div className="muted editor-fields">
+      <p>
+        Only the text inside &lt; &gt; can be changed: {fields.count} field
+        {fields.count === 1 ? "" : "s"}.
+      </p>
+      {fields.skipped.length > 0 && (
+        <details>
+          <summary>
+            {fields.skipped.length} field
+            {fields.skipped.length === 1 ? "" : "s"} could not be made editable
+          </summary>
+          <ul>
+            {fields.skipped.map((item, index) => (
+              <li key={index}>
+                &lt;{item.text}&gt;: {SKIP_REASONS[item.reason] ?? item.reason}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export default function EditorPage() {
   const { documentId, versionId } = useParams<{
     documentId: string;
@@ -70,9 +116,15 @@ export default function EditorPage() {
   const query = useSearchParams();
   const holder = useRef<HTMLDivElement>(null);
   const tocBridge = useRef<Window | null>(null);
-  const tocPending = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const tocPending = useRef<{
+    id: string;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
   const [tocReady, setTocReady] = useState(false);
   const [tocUpdating, setTocUpdating] = useState(false);
+  const [fields, setFields] = useState<FieldPolicy | null>(null);
+  // The server opens documents without <...> fields read-only, whatever the URL asked for.
+  const [readOnly, setReadOnly] = useState(false);
   const sessionRef = useRef("");
   const returnAfterSaveRef = useRef(false);
   const [message, setMessage] = useState("Preparing document editor…");
@@ -114,6 +166,14 @@ export default function EditorPage() {
       );
       if (!response.ok) throw new Error(await response.text());
       const config = await response.json();
+      const fieldsOnly = config.edit_policy === "placeholders";
+      const opened = config.editorConfig?.mode === "view" ? "view" : mode;
+      if (opened !== mode) setReadOnly(true);
+      if (fieldsOnly)
+        setFields({
+          count: config.placeholder_fields ?? 0,
+          skipped: config.placeholders_skipped ?? [],
+        });
       setMergedDocumentName(config.document?.title || "");
       sessionId = config.session_id;
       sessionRef.current = sessionId;
@@ -144,7 +204,11 @@ export default function EditorPage() {
               events: {
                 ...config.events,
                 onDocumentReady: () => {
-                  setMessage("Document ready. Use Update TOC to refresh entries and pagination before saving.");
+                  setMessage(
+                    fieldsOnly
+                      ? "Document ready. Only the text inside < > fields can be changed."
+                      : "Document ready. Use Update TOC to refresh entries and pagination before saving.",
+                  );
                 },
               },
               width: "100%",
@@ -155,14 +219,14 @@ export default function EditorPage() {
             setMessage(
               anchor
                 ? "Opening the merged section bookmark in the document editor. Use Save to create a new immutable version."
-                : mode === "view"
+                : opened === "view"
                   ? "Read-only version view."
                   : "Use the editor Save button. IDMS will create the next immutable version automatically.",
             );
           }
         })
         .catch(() => setMessage("The document editor could not be loaded."));
-      if (mode === "edit")
+      if (opened === "edit")
         timer = setInterval(async () => {
           const state = await fetch(`${api}/editor-sessions/${sessionId}`).then(
             (item) => item.json(),
@@ -176,7 +240,7 @@ export default function EditorPage() {
             clearInterval(timer);
             if (returnAfterSaveRef.current) window.location.assign(returnTo);
           }
-          if (state.status === "conflict") {
+          if (state.status === "conflict" || state.status === "rejected") {
             setSaving(false);
             setMessage(
               state.conflict_message ||
@@ -197,7 +261,13 @@ export default function EditorPage() {
   }, [mode, query, returnTo, versionId]);
 
   async function saveDocument() {
-    if (!sessionRef.current || mode !== "edit" || saving || savedVersionId)
+    if (
+      !sessionRef.current ||
+      mode !== "edit" ||
+      readOnly ||
+      saving ||
+      savedVersionId
+    )
       return;
     setSaving(true);
     // A merge-workspace editor is a review step. Once its save has completed
@@ -307,15 +377,28 @@ export default function EditorPage() {
   useEffect(() => {
     function receive(event: MessageEvent) {
       const data = event.data;
-      if (event.origin !== window.location.origin || !data || data.sessionId !== sessionRef.current) return;
+      if (
+        event.origin !== window.location.origin ||
+        !data ||
+        data.sessionId !== sessionRef.current
+      )
+        return;
       if (data.type === "idms-toc-ready" && event.source) {
         tocBridge.current = event.source as Window;
         setTocReady(true);
-      } else if (data.type === "idms-toc-result" && event.source === tocBridge.current && data.requestId === tocPending.current?.id) {
+      } else if (
+        data.type === "idms-toc-result" &&
+        event.source === tocBridge.current &&
+        data.requestId === tocPending.current?.id
+      ) {
         if (tocPending.current) clearTimeout(tocPending.current.timer);
         tocPending.current = null;
         setTocUpdating(false);
-        setMessage(data.ok === true ? "Table of contents refreshed, including titles, numbering and page numbers. Save to keep this update." : "The editor could not confirm the TOC update. No successful refresh has been recorded.");
+        setMessage(
+          data.ok === true
+            ? "Table of contents refreshed, including titles, numbering and page numbers. Save to keep this update."
+            : "The editor could not confirm the TOC update. No successful refresh has been recorded.",
+        );
       }
     }
     window.addEventListener("message", receive);
@@ -328,19 +411,28 @@ export default function EditorPage() {
   }, []);
   function updateTableOfContents() {
     if (!tocBridge.current || tocPending.current) {
-      setMessage("The TOC update tool is not ready. Wait for the editor to load.");
+      setMessage(
+        "The TOC update tool is not ready. Wait for the editor to load.",
+      );
       return;
     }
-    const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (value) => value.toString(16).padStart(2, "0")).join("");
+    const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (value) =>
+      value.toString(16).padStart(2, "0"),
+    ).join("");
     const timer = setTimeout(() => {
       tocPending.current = null;
       setTocUpdating(false);
-      setMessage("TOC update timed out. Review the document and retry; refresh is not confirmed.");
+      setMessage(
+        "TOC update timed out. Review the document and retry; refresh is not confirmed.",
+      );
     }, 60000);
     tocPending.current = { id, timer };
     setTocUpdating(true);
     setMessage("Updating table of contents…");
-    tocBridge.current.postMessage({ type: "idms-toc-update", sessionId: sessionRef.current, requestId: id }, window.location.origin);
+    tocBridge.current.postMessage(
+      { type: "idms-toc-update", sessionId: sessionRef.current, requestId: id },
+      window.location.origin,
+    );
   }
 
   return (
@@ -355,11 +447,14 @@ export default function EditorPage() {
             <span aria-hidden="true">←</span> Version history
           </button>
           <p className="eyebrow">
-            {mode === "view" ? "READ ONLY" : "EDITING WORKSPACE"}
+            {mode === "view" || readOnly ? "READ ONLY" : "EDITING WORKSPACE"}
           </p>
         </div>
         <div className="editor-controls">
           <p className="muted editor-status">{message}</p>
+          {fields && (mode === "edit" || fields.count === 0) && (
+            <FieldNotice fields={fields} />
+          )}
           {isInitialMerge && !savedVersionId && (
             <>
               <label className="editor-summary">
@@ -375,7 +470,7 @@ export default function EditorPage() {
               </label>
             </>
           )}
-          {mode === "edit" && !savedVersionId && (
+          {mode === "edit" && !readOnly && !savedVersionId && (
             <>
               {mergeAnchors.length > 1 && (
                 <div
@@ -425,19 +520,31 @@ export default function EditorPage() {
               >
                 {saving ? "Saving…" : "Save"}
               </button>
-              <button
-                type="button"
-                className="secondary"
-                onClick={updateTableOfContents}
-                disabled={!tocReady || tocUpdating || saving}
-              >
-                {tocUpdating ? "Updating TOC…" : "Update TOC"}
-              </button>
+              {!fields && (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={updateTableOfContents}
+                  disabled={!tocReady || tocUpdating || saving}
+                >
+                  {tocUpdating ? "Updating TOC…" : "Update TOC"}
+                </button>
+              )}
               <a
                 className="editor-download"
                 href={`/api/v1/documents/${documentId}/versions/${versionId}/download-clean`}
               >
-                <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  aria-hidden="true"
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M12 3v12m-4-4 4 4 4-4" />
                   <path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
                 </svg>
