@@ -354,28 +354,29 @@ test("progress follows saved worker stages and survives reloading", async ({
   await page.goto("/document-merges/merge-test");
   const progress = page.getByRole("progressbar", { name: "Merge progress" });
   await expect(progress).toHaveAttribute("value", "0");
-  await expect(progress).toHaveAttribute("max", "4");
+  await expect(progress).toHaveAttribute("max", "100");
   await expect(
     page.getByText("You can leave this page.", { exact: false }),
   ).toHaveCount(0);
+  await expect(page.locator(".document-merge-progress ol")).toHaveCount(0);
+  await expect(page.getByText(/steps complete/)).toHaveCount(0);
   status = "running";
   for (const [next, done] of [
     ["parsing", 0],
-    ["merging", 1],
-    ["refreshing_toc", 2],
-    ["persisting", 3],
+    ["merging", 25],
+    ["refreshing_toc", 50],
+    ["persisting", 75],
   ] as const) {
     stage = next;
     await expect(progress).toHaveAttribute("value", String(done), {
       timeout: 5000,
     });
-    await expect(
-      page.getByText(`${done} of 4 steps complete`, { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText(`${done}%`, { exact: true })).toBeVisible();
+    await expect(page.getByRole("status")).toHaveText("Merging documents…");
   }
   await page.reload();
-  await expect(progress).toHaveAttribute("value", "3");
+  await expect(progress).toHaveAttribute("value", "75");
   status = stage = "completed";
-  await expect(progress).toHaveAttribute("value", "4", { timeout: 5000 });
+  await expect(progress).toHaveAttribute("value", "100", { timeout: 5000 });
   await expect(page.getByRole("link", { name: "Download DOCX" })).toBeVisible();
 });

@@ -62,19 +62,9 @@ export const startDocumentMerge = (id: string, versionIds: string[]) =>
 export const documentMergeDownloadUrl = (id: string) =>
   `${api}/document-merges/${id}/download`;
 
-export const mergeStageLabel = (status: string, stage: string) => {
+export const mergeStageLabel = (status: string, _stage: string) => {
   if (status === "draft") return "Ready for documents";
   if (status === "completed") return "Ready to view and download";
   if (status === "failed") return "Needs attention";
-  return (
-    (
-      {
-        queued: "Waiting for the merge worker…",
-        parsing: "Checking and parsing documents…",
-        merging: "Merging documents and renumbering headings…",
-        refreshing_toc: "Updating tables of contents and page numbers…",
-        persisting: "Saving the merged document…",
-      } as Record<string, string>
-    )[stage] ?? "Processing documents…"
-  );
+  return "Merging documents…";
 };

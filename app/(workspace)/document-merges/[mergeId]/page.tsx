@@ -12,23 +12,16 @@ import { createUploadIntent, uploadDocx } from "../../../../lib/api/projects";
 import { fileSha256 } from "../../../../lib/file-checksum";
 import type { DocumentMerge } from "../../../../types/document-merges";
 
-const mergeSteps = [
-  "Check documents",
-  "Merge and renumber",
-  "Update tables of contents",
-  "Save document",
-];
-
-// These are completed pipeline steps, not an estimate of elapsed time.
-function completedSteps(merge: DocumentMerge) {
-  if (merge.status === "completed") return mergeSteps.length;
+// Progress follows completed worker phases, rather than elapsed time.
+function mergePercentage(merge: DocumentMerge) {
+  if (merge.status === "completed") return 100;
   return (
     {
       queued: 0,
       parsing: 0,
-      merging: 1,
-      refreshing_toc: 2,
-      persisting: 3,
+      merging: 25,
+      refreshing_toc: 50,
+      persisting: 75,
     } as Record<string, number>
   )[merge.stage];
 }
@@ -128,6 +121,7 @@ export default function DocumentMergePage() {
     }
   }
   const ready = merge?.status === "completed";
+  const percentage = merge ? mergePercentage(merge) : undefined;
   const processing = merge?.status === "queued" || merge?.status === "running";
   const inputs = order
     .map((id) => merge?.inputs.find((i) => i.version_id === id))
@@ -246,39 +240,21 @@ export default function DocumentMergePage() {
                     Merge progress
                   </strong>
                   <span>
-                    {completedSteps(merge) === undefined
+                    {percentage === undefined
                       ? "Processing…"
-                      : `${completedSteps(merge)} of ${mergeSteps.length} steps complete`}
+                      : `${percentage}%`}
                   </span>
                 </div>
                 <progress
-                  max={mergeSteps.length}
-                  value={completedSteps(merge)}
+                  max={100}
+                  value={percentage}
                   aria-labelledby="document-merge-progress-label"
                   aria-valuetext={
-                    completedSteps(merge) === undefined
+                    percentage === undefined
                       ? mergeStageLabel(merge.status, merge.stage)
-                      : `${completedSteps(merge)} of ${mergeSteps.length} steps complete. ${mergeStageLabel(merge.status, merge.stage)}`
+                      : `${percentage}%`
                   }
                 />
-                <ol className="document-merge-progress-steps">
-                  {mergeSteps.map((step, index) => (
-                    <li
-                      key={step}
-                      data-complete={index < (completedSteps(merge) ?? 0)}
-                      aria-current={
-                        processing && index === completedSteps(merge)
-                          ? "step"
-                          : undefined
-                      }
-                    >
-                      <span aria-hidden="true">
-                        {index < (completedSteps(merge) ?? 0) ? "✓" : index + 1}
-                      </span>
-                      {step}
-                    </li>
-                  ))}
-                </ol>
               </div>
             )}
             {ready && (

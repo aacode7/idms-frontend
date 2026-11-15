@@ -2418,10 +2418,4 @@ small {
 .document-merge-progress progress::-webkit-progress-bar { background: #dce5f0; border-radius: 8px; }
 .document-merge-progress progress::-webkit-progress-value { background: #0aadaa; border-radius: 8px; }
 .document-merge-progress progress::-moz-progress-bar { background: #0aadaa; border-radius: 8px; }
-.document-merge-progress-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 14px; list-style: none; padding: 0; margin: 18px 0 0; }
-.document-merge-progress-steps li { display: flex; align-items: center; gap: 8px; color: #536e8c; font-size: 13px; }
-.document-merge-progress-steps li > span { display: inline-grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; border: 1px solid #b9cbd9; border-radius: 50%; }
-.document-merge-progress-steps li[data-complete="true"] { color: #006e7c; }
-.document-merge-progress-steps li[data-complete="true"] > span { background: #d9f2ef; border-color: #0aadaa; }
-.document-merge-progress-steps li[aria-current="step"] { font-weight: 700; color: #163a5d; }
 @media (max-width: 640px) { .document-merge-card { padding: 22px; } .dashboard-topbar-center { display: none; } .document-merge-inputs li { flex-wrap: wrap; } .dashboard-topbar-actions .merge-primary-link { font-size: 13px; padding: 9px 12px; } }
