@@ -8,12 +8,27 @@ const apiOrigin = (
 ).replace(/\/$/, "");
 const requestTimeoutMs = 120_000;
 
-function upstreamHeaders(request: NextRequest) {
+function upstreamHeaders(request: NextRequest, requestId: string) {
   const headers = new Headers(request.headers);
   headers.delete("host");
   headers.delete("content-length");
   headers.delete("connection");
+  // The API logs this ID, so a proxy failure and the API's log line can be matched.
+  headers.set("x-request-id", requestId);
   return headers;
+}
+
+function logProxyFailure(fields: Record<string, string>) {
+  // One JSON line, like the API's logs. Path only: query strings carry signed tokens.
+  console.error(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: "error",
+      service: "idms-web",
+      message: "api_proxy_failed",
+      ...fields,
+    }),
+  );
 }
 
 function responseHeaders(upstream: Response) {
@@ -49,11 +64,12 @@ async function proxy(
   const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
   const url = `${apiOrigin}/api/v1/${path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
   const method = request.method.toUpperCase();
+  const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
 
   try {
     const upstream = await fetch(url, {
       method,
-      headers: upstreamHeaders(request),
+      headers: upstreamHeaders(request, requestId),
       body:
         method === "GET" || method === "HEAD"
           ? undefined
@@ -67,11 +83,25 @@ async function proxy(
       headers: responseHeaders(upstream),
     });
   } catch (error) {
-    const message =
-      error instanceof Error && error.name === "AbortError"
-        ? "The IDMS API took longer than two minutes to respond."
-        : "The IDMS API could not be reached.";
-    return Response.json({ detail: message }, { status: 504 });
+    const timedOut = error instanceof Error && error.name === "AbortError";
+    logProxyFailure({
+      request_id: requestId,
+      method,
+      path: `/api/v1/${path.join("/")}`,
+      reason: timedOut ? "timeout" : "unreachable",
+      error: error instanceof Error ? error.message : String(error),
+      cause:
+        error instanceof Error && error.cause
+          ? String((error.cause as { code?: string }).code ?? error.cause)
+          : "",
+    });
+    const message = timedOut
+      ? "The IDMS API took longer than two minutes to respond."
+      : "The IDMS API could not be reached.";
+    return Response.json(
+      { detail: message, request_id: requestId },
+      { status: 504, headers: { "x-request-id": requestId } },
+    );
   } finally {
     clearTimeout(timeout);
   }

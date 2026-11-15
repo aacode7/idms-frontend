@@ -28,7 +28,8 @@ build_runtime() {
 start_runtime() {
   local mode="${1:-full}"
   build_runtime
-  start_backend_services redis
+  # Migrations need a healthy database, not only Redis.
+  start_backend_services --wait postgres redis
   apply_web_migrations
   if [[ "${mode}" == "extraction" ]]; then
     # Recreate the extraction worker from the same source build as the web/API
