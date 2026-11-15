@@ -68,6 +68,7 @@ type FieldPolicy = {
 };
 
 const SKIP_REASONS: Record<string, string> = {
+  in_heading: "in a heading (headings feed the table of contents)",
   in_field_result: "inside a field such as the table of contents",
   in_hyperlink: "inside a hyperlink",
   in_content_control: "inside an existing form field",
@@ -127,6 +128,8 @@ export default function EditorPage() {
   const [readOnly, setReadOnly] = useState(false);
   const sessionRef = useRef("");
   const returnAfterSaveRef = useRef(false);
+  // The last rejected-save message shown; the session stays open for a corrected save.
+  const rejectionRef = useRef("");
   const [message, setMessage] = useState("Preparing document editor…");
   const [changeSummary, setChangeSummary] = useState(
     query.get("description") || "",
@@ -240,6 +243,18 @@ export default function EditorPage() {
             clearInterval(timer);
             if (returnAfterSaveRef.current) window.location.assign(returnTo);
           }
+          if (
+            state.status === "active" &&
+            state.conflict_message &&
+            state.conflict_message !== rejectionRef.current
+          ) {
+            rejectionRef.current = state.conflict_message;
+            returnAfterSaveRef.current = false;
+            setSaving(false);
+            setMessage(
+              `${state.conflict_message} Correct the fields and save again.`,
+            );
+          }
           if (state.status === "conflict" || state.status === "rejected") {
             setSaving(false);
             setMessage(
@@ -303,7 +318,20 @@ export default function EditorPage() {
         },
       );
       if (!response.ok) throw new Error(await response.text());
-      const outcome = (await response.json()) as { status?: string };
+      const outcome = (await response.json()) as {
+        status?: string;
+        message?: string;
+      };
+      if (outcome.status === "rejected") {
+        setSaving(false);
+        returnAfterSaveRef.current = false;
+        setMessage(
+          `${outcome.message ?? "Save rejected."} Correct the fields and save again.`,
+        );
+        return;
+      }
+      // The server cleared the earlier rejection; a new one must be shown.
+      rejectionRef.current = "";
       if (outcome.status === "unchanged") {
         setSaving(false);
         if (returnAfterSaveRef.current) {
