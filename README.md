@@ -1,5 +1,12 @@
 # IDMS Frontend
 
+The insertion plan enforces a maximum of four heading levels for inserted sections.
+Selections that would reach level 5 or deeper show a blocking message and disable
+merge creation. Moving the selection higher or excluding deeper children updates
+the check immediately. The current plan must also pass compatibility checks;
+missing master numbering levels block submission. Editing the plan invalidates
+previous findings, including responses that arrive after the edit.
+
 The Next.js workspace includes projects, uploads, legacy analysis/merge/editor workflows and the read-only DOCX extraction inspector. Read [the inspection guide](docs/EXTRACTION_INSPECTION.md), [E9 checkpoint](../idms-backend/IDMS_EXTRACTION_E9_CHECKPOINT.md) and [support matrix](../idms-backend/docs/EXTRACTION_SUPPORT_MATRIX.md). The supported-profile gate passes; broad Word/enterprise fidelity limits remain explicit. Existing editor/merge contracts stay separate.
 
 Copy `.env.example` to `.env.local`, run `npm install`, then `npm run dev`.

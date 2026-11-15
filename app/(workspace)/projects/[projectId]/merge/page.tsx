@@ -20,6 +20,7 @@ import type {
 } from "../../../../../types/contracts";
 import { SourceSectionRow } from "../../../../../components/merge/source-section-row";
 import { SectionHierarchy } from "../../../../../components/merge/section-hierarchy";
+import { insertedHeadingDepth } from "../../../../../lib/heading-depth";
 import {
   branchNodes,
   wholeBranch,
@@ -83,7 +84,8 @@ export default function MergePage() {
     [selected, setSelected] = useState<Selection[]>([]),
     [open, setOpen] = useState<string | null>(null),
     [message, setMessage] = useState(""),
-    [preview, setPreview] = useState<MergePreview | null>(null),
+    [previewResult, setPreview] = useState<MergePreview | null>(null),
+    [previewPlanKey, setPreviewPlanKey] = useState(""),
     [results, setResults] = useState<MergeResult[]>([]),
     [checking, setChecking] = useState(false),
     [merging, setMerging] = useState(false),
@@ -105,6 +107,15 @@ export default function MergePage() {
     (d) => d.role === "source" || d.role === "master_candidate",
   );
   const masterOutline = master ? (outlines[master.id] ?? []) : [];
+  const planKey = JSON.stringify([
+    master?.version_id,
+    selected,
+    placementCandidate,
+  ]);
+  const planKeyRef = useRef(planKey);
+  planKeyRef.current = planKey;
+  const preview = previewResult;
+  const currentPreview = previewPlanKey === planKey ? previewResult : null;
   function immediateParent(
     destination: string | null,
   ): OutlineNode | undefined {
@@ -126,6 +137,32 @@ export default function MergePage() {
   const invalidParentLevel = selected.some(
     (selection) => !!parentLevelError(selection),
   );
+  const headingDepths = selected.map((selection, index) => {
+    const verified = currentPreview?.diagnostics.find(
+      (finding) =>
+        finding.code === "compatibility.heading_depth" &&
+        finding.operation_index === index,
+    );
+    if (
+      verified?.master_value &&
+      Number.isInteger(Number(verified.master_value))
+    )
+      return Number(verified.master_value);
+    return insertedHeadingDepth(
+      selection.node,
+      selection.includedSections,
+      outlines[selection.document.id] ?? [],
+      masterOutline.find((node) => node.node_key === selection.destination),
+      immediateParent(selection.destination),
+      selection.resolutionOptions,
+    );
+  });
+  const unsupportedDepth = headingDepths.some((depth) => depth > 4);
+  const blockingFindings = (currentPreview?.diagnostics ?? []).filter(
+    (finding) => finding.severity === "error",
+  );
+  const invalidPlacement =
+    invalidParentLevel || unsupportedDepth || blockingFindings.length > 0;
   const compatibilityGroups = useMemo(() => {
     const groups = new Map<number, Diagnostic[]>();
     for (const finding of preview?.diagnostics ?? []) {
@@ -506,14 +543,22 @@ export default function MergePage() {
     );
   }
   async function check() {
-    if (invalidParentLevel) return;
+    if (invalidParentLevel || unsupportedDepth) return;
+    const requestedPlan = planKey;
     setChecking(true);
     setMessage(
       "Checking compatibility… Large DOCX files can take up to two minutes.",
     );
     try {
-      setPreview(await previewMerge(projectId, operations()));
-      setMessage("Compatibility results are shown below.");
+      const result = await previewMerge(projectId, operations());
+      if (planKeyRef.current !== requestedPlan) return;
+      setPreview(result);
+      setPreviewPlanKey(requestedPlan);
+      setMessage(
+        result.diagnostics.some((finding) => finding.severity === "error")
+          ? "Resolve the highlighted placement issues before merging."
+          : "Compatibility results are shown below.",
+      );
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Compatibility check failed.",
@@ -523,12 +568,48 @@ export default function MergePage() {
     }
   }
   async function merge() {
-    if (!master || !selected.length || invalidParentLevel) return;
+    if (!master || !selected.length || invalidPlacement) return;
+    const requestedPlan = planKey;
+    const requestedOperations = operations();
+    if (!currentPreview) {
+      setChecking(true);
+      setMessage(
+        "Checking heading placement and compatibility before merging…",
+      );
+      try {
+        const result = await previewMerge(projectId, requestedOperations);
+        if (planKeyRef.current !== requestedPlan) {
+          setMessage(
+            "The insertion plan changed during the check. Review it and create the merge again.",
+          );
+          return;
+        }
+        setPreview(result);
+        setPreviewPlanKey(requestedPlan);
+        if (
+          result.diagnostics.some((finding) => finding.severity === "error")
+        ) {
+          setMessage(
+            "Resolve the highlighted placement issues before merging.",
+          );
+          return;
+        }
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "Heading placement could not be checked. Try again.",
+        );
+        return;
+      } finally {
+        setChecking(false);
+      }
+    }
     setMerging(true);
     setMergeProgress(5);
     setMergeStage("Preparing merge");
     try {
-      const job = await createMergeJob(projectId, operations(), {
+      const job = await createMergeJob(projectId, requestedOperations, {
         generated_filename: mergedDocumentName.trim() || undefined,
         initial_description: initialMergeDescription.trim() || undefined,
       });
@@ -855,7 +936,7 @@ export default function MergePage() {
                 </div>
                 {selected.length > 0 && (
                   <span className="selection-status">
-                    {invalidParentLevel
+                    {invalidPlacement
                       ? "Heading level needs attention"
                       : "Ready to review"}
                   </span>
@@ -940,7 +1021,8 @@ export default function MergePage() {
                   </div>
                   <select
                     value={s.position}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      setPreview(null);
                       setSelected((v) =>
                         v.map((x, n) =>
                           n === i
@@ -950,8 +1032,8 @@ export default function MergePage() {
                               }
                             : x,
                         ),
-                      )
-                    }
+                      );
+                    }}
                   >
                     <option value="after">After</option>
                     <option value="before">Before</option>
@@ -991,14 +1073,37 @@ export default function MergePage() {
                   <button
                     type="button"
                     className="remove-selection"
-                    onClick={() =>
+                    onClick={() => {
+                      setPreview(null);
                       setSelected((items) =>
                         items.filter((_, index) => index !== i),
-                      )
-                    }
+                      );
+                    }}
                   >
                     Remove
                   </button>
+                  <div className="plan-placement-feedback" aria-live="polite">
+                    {!parentLevelError(s) &&
+                      !blockingFindings.some(
+                        (finding) => finding.operation_index === i,
+                      ) &&
+                      headingDepths[i] > 4 && (
+                        <p className="plan-level-error" role="alert">
+                          {`This selection would reach heading level ${headingDepths[i]}. Merge supports a maximum of 4 heading levels. Choose a higher destination or exclude deeper child sections.`}
+                        </p>
+                      )}
+                    {blockingFindings
+                      .filter((finding) => finding.operation_index === i)
+                      .map((finding) => (
+                        <p
+                          className="plan-level-error"
+                          role="alert"
+                          key={finding.code}
+                        >
+                          {finding.message}
+                        </p>
+                      ))}
+                  </div>
                 </div>
               ))}
             </section>
@@ -1294,6 +1399,7 @@ export default function MergePage() {
                 disabled={
                   !selected.length ||
                   invalidParentLevel ||
+                  unsupportedDepth ||
                   !!placementCandidate ||
                   checking ||
                   merging
@@ -1307,7 +1413,7 @@ export default function MergePage() {
                 disabled={
                   !master ||
                   !selected.length ||
-                  invalidParentLevel ||
+                  invalidPlacement ||
                   !!placementCandidate ||
                   checking ||
                   merging

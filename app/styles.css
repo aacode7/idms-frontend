@@ -381,6 +381,23 @@ button:disabled {
 .plan-row .plan-level-error {
   color: #b42318;
 }
+.plan-placement-feedback {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.plan-placement-feedback:empty {
+  display: none;
+}
+.plan-placement-feedback .plan-level-error {
+  color: #b42318;
+  background: #fef3f2;
+  border-left: 3px solid #d92d20;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
 
 .feedback.error {
   color: #ffb4b4;
