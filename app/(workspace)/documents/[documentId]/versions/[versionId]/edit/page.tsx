@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import { FieldNavigator, type DocumentField } from "../../../../../../../components/FieldNavigator";
 
 const api =
   process.env.NEXT_PUBLIC_IDMS_API_URL ?? "http://localhost:8000/api/v1";
 
 declare global {
   interface Window {
-    DocsAPI?: { DocEditor: new (id: string, config: object) => unknown };
+    DocsAPI?: { DocEditor: new (id: string, config: object) => { destroyEditor?: () => void } };
   }
 }
 
@@ -65,6 +66,7 @@ function warmEditorConnection(documentServerUrl: string) {
 type FieldPolicy = {
   count: number;
   skipped: { text: string; reason: string }[];
+  items: DocumentField[];
 };
 
 const SKIP_REASONS: Record<string, string> = {
@@ -77,7 +79,7 @@ const SKIP_REASONS: Record<string, string> = {
   unsupported_structure: "mixed with other content",
 };
 
-function FieldNotice({ fields }: { fields: FieldPolicy }) {
+function FieldNotice({ fields, readOnly }: { fields: FieldPolicy; readOnly: boolean }) {
   if (fields.count === 0)
     return (
       <p className="muted editor-fields">
@@ -87,8 +89,9 @@ function FieldNotice({ fields }: { fields: FieldPolicy }) {
   return (
     <div className="muted editor-fields">
       <p>
-        Only the text inside &lt; &gt; can be changed: {fields.count} field
-        {fields.count === 1 ? "" : "s"}.
+        {readOnly ? "Remembered fields in this read-only view:" : "Only marked fields can be changed:"} {fields.count} field
+        {fields.count === 1 ? "" : "s"}. Downloaded merged documents show the
+        values without placeholder brackets.
       </p>
       {fields.skipped.length > 0 && (
         <details>
@@ -152,8 +155,12 @@ export default function EditorPage() {
 
   useEffect(() => {
     let sessionId = "";
+    let disposed = false;
+    let editor: { destroyEditor?: () => void } | undefined;
     let timer: ReturnType<typeof setInterval> | undefined;
     async function start() {
+      setFields(null);
+      setReadOnly(false);
       const response = await fetch(
         `${api}/versions/${versionId}/editor-session`,
         {
@@ -169,6 +176,7 @@ export default function EditorPage() {
       );
       if (!response.ok) throw new Error(await response.text());
       const config = await response.json();
+      if (disposed) return;
       const fieldsOnly = config.edit_policy === "placeholders";
       const opened = config.editorConfig?.mode === "view" ? "view" : mode;
       if (opened !== mode) setReadOnly(true);
@@ -176,6 +184,7 @@ export default function EditorPage() {
         setFields({
           count: config.placeholder_fields ?? 0,
           skipped: config.placeholders_skipped ?? [],
+          items: config.placeholder_items ?? [],
         });
       setMergedDocumentName(config.document?.title || "");
       sessionId = config.session_id;
@@ -183,7 +192,7 @@ export default function EditorPage() {
       warmEditorConnection(config.documentServerUrl);
       loadEditorApi(config.documentServerUrl)
         .then(() => {
-          if (window.DocsAPI && holder.current) {
+          if (!disposed && window.DocsAPI && holder.current) {
             const anchor = query.get("anchor");
             config.editorConfig = {
               ...config.editorConfig,
@@ -202,22 +211,24 @@ export default function EditorPage() {
                 },
               },
             };
-            const editor = new window.DocsAPI.DocEditor("onlyoffice-editor", {
+            editor = new window.DocsAPI.DocEditor("onlyoffice-editor", {
               ...config,
               events: {
                 ...config.events,
                 onDocumentReady: () => {
                   setMessage(
-                    fieldsOnly
-                      ? "Document ready. Only the text inside < > fields can be changed."
+                    opened === "view"
+                      ? "Document ready. Read-only view; marked fields are remembered."
+                      : fieldsOnly
+                      ? "Document ready. Only marked fields can be changed."
                       : "Document ready. Use Update TOC to refresh entries and pagination before saving.",
                   );
                 },
               },
               width: "100%",
-              // ONLYOFFICE otherwise falls back to its 150px default iframe height.
-              // Give its API a concrete viewport-based height, not just CSS on its host.
-              height: `${Math.max(window.innerHeight - 122, 640)}px`,
+              // The stable flex container accounts for the actual toolbar and
+              // field-navigation heights, keeping focused forms on screen.
+              height: "100%",
             });
             setMessage(
               anchor
@@ -228,7 +239,7 @@ export default function EditorPage() {
             );
           }
         })
-        .catch(() => setMessage("The document editor could not be loaded."));
+        .catch(() => { if (!disposed) setMessage("The document editor could not be loaded."); });
       if (opened === "edit")
         timer = setInterval(async () => {
           const state = await fetch(`${api}/editor-sessions/${sessionId}`).then(
@@ -271,7 +282,9 @@ export default function EditorPage() {
       ),
     );
     return () => {
+      disposed = true;
       if (timer) clearInterval(timer);
+      editor?.destroyEditor?.();
     };
   }, [mode, query, returnTo, versionId]);
 
@@ -480,8 +493,8 @@ export default function EditorPage() {
         </div>
         <div className="editor-controls">
           <p className="muted editor-status">{message}</p>
-          {fields && (mode === "edit" || fields.count === 0) && (
-            <FieldNotice fields={fields} />
+          {fields && (
+            <FieldNotice fields={fields} readOnly={mode === "view" || readOnly} />
           )}
           {isInitialMerge && !savedVersionId && (
             <>
@@ -588,9 +601,17 @@ export default function EditorPage() {
               View version history →
             </a>
           )}
+          {(mode === "view" || readOnly) && (
+            <a className="editor-download" href={`/api/v1/documents/${documentId}/versions/${versionId}/download-clean`}>
+              Download clean DOCX
+            </a>
+          )}
         </div>
       </header>
-      <div ref={holder} id="onlyoffice-editor" className="editor-frame" />
+      {fields && <FieldNavigator items={fields.items} sessionId={sessionRef.current} autoLocate={!activeAnchor} />}
+      <div className="editor-frame">
+        <div ref={holder} id="onlyoffice-editor" style={{ height: "100%" }} />
+      </div>
       {showLeaveDialog && (
         <div className="leave-dialog-backdrop" role="presentation">
           <section

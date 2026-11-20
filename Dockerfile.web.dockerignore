@@ -33,3 +33,10 @@
 
 idms-backend/storage/**
 idms-backend/.local/**
+
+# Never overwrite the clean dependency install or build output with host artifacts.
+idms-frontend/node_modules/**
+idms-frontend/.next/**
+idms-frontend/out/**
+idms-frontend/coverage/**
+idms-frontend/*.tsbuildinfo
